@@ -1,4 +1,9 @@
-import { signInWithPopup, signOut, type UserCredential } from 'firebase/auth';
+import {
+  sendPasswordResetEmail,
+  signInWithPopup,
+  signOut,
+  type UserCredential,
+} from 'firebase/auth';
 import {
   doc,
   getDoc,
@@ -24,6 +29,7 @@ import type {
 
 export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
 export const FIREBASE_AUTH_DOMAINS_URL = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
+export const FIREBASE_AUTH_PROVIDERS_URL = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`;
 
 export enum OperationType {
   CREATE = 'create',
@@ -93,6 +99,21 @@ export function formatCloudErrorMessage(err: unknown, fallback: string): string 
   }
   if (raw.includes('auth/popup-closed-by-user') || raw.includes('auth/cancelled-popup-request')) {
     return 'Google sign-in popup was closed before completion.';
+  }
+  if (raw.includes('auth/invalid-email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (raw.includes('auth/too-many-requests')) {
+    return 'Too many recovery attempts. Please wait a few minutes before requesting another email.';
+  }
+  if (raw.includes('auth/operation-not-allowed')) {
+    return 'Email/Password sign-in provider is not enabled yet in Firebase Console → Authentication → Sign-in method.';
+  }
+  if (raw.includes('auth/network-request-failed')) {
+    return 'Network error while contacting Firebase Auth. Check your connection and try again.';
+  }
+  if (raw.includes('auth/user-not-found')) {
+    return 'No Firebase Auth user was found for that email address.';
   }
   try {
     const parsed = JSON.parse(raw);
@@ -316,6 +337,14 @@ export async function connectCloudStorageDb(): Promise<UserCredential> {
 
 export async function disconnectCloudStorageDb(): Promise<void> {
   await signOut(auth);
+}
+
+export async function sendOperativePasswordResetEmail(email: string): Promise<void> {
+  const cleanEmail = email.trim();
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    throw new Error('Please enter a valid email address.');
+  }
+  await sendPasswordResetEmail(auth, cleanEmail);
 }
 
 export async function fetchCloudOperative(uid: string): Promise<UserAccount | null> {

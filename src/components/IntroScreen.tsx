@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Shield,
   Flame,
@@ -39,6 +39,7 @@ interface IntroScreenProps {
   onUpdateBio: (nextBio: string) => void;
   onSignOut: () => void;
   onOpenAccountSwitcher: () => void;
+  onOpenChangePassword: () => void;
   cloudUser: FirebaseUser | null;
   cloudSyncState: CloudSyncStatus;
   cloudBusy: boolean;
@@ -70,6 +71,7 @@ export default function IntroScreen({
   onUpdateBio,
   onSignOut,
   onOpenAccountSwitcher,
+  onOpenChangePassword,
   cloudUser,
   cloudSyncState,
   cloudBusy,
@@ -95,6 +97,10 @@ export default function IntroScreen({
   const [selectedClass, setSelectedClass] = useState<'vanguard' | 'shadowblade' | 'spellweaver'>('vanguard');
   const [playerName, setPlayerName] = useState(account.username);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setPlayerName(account.username);
+  }, [account.username]);
 
   const classes = [
     {
@@ -311,6 +317,7 @@ export default function IntroScreen({
               onUpdateBio={onUpdateBio}
               onSignOut={onSignOut}
               onOpenAccountSwitcher={onOpenAccountSwitcher}
+              onOpenChangePassword={onOpenChangePassword}
               cloudUser={cloudUser}
               cloudSyncState={cloudSyncState}
               cloudBusy={cloudBusy}

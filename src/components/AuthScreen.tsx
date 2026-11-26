@@ -15,12 +15,14 @@ import {
   Copy,
   Check,
   ExternalLink,
+  KeyRound,
 } from 'lucide-react';
 import type { TacticalAvatarId, UserAccount } from '../types';
 import { OPERATOR_ITEMS } from '../config/armory';
 import { PedestalInspector3D } from '../three/StorePedestal3D';
 import {
   TACTICAL_AVATARS,
+  changeAccountPassword,
   getRankFromStats,
   listSavedAccounts,
   loginAccount,
@@ -31,6 +33,7 @@ import {
   FIREBASE_AUTH_DOMAINS_URL,
   formatCloudErrorMessage,
 } from '../services/operativeCloudDb';
+import ResetPasswordPanel from './ResetPasswordPanel';
 
 interface AuthScreenProps {
   onAuthenticated: (account: UserAccount) => void;
@@ -118,6 +121,11 @@ export default function AuthScreen({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [pwSuccessMessage, setPwSuccessMessage] = useState<string | null>(null);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [createdConfirmation, setCreatedConfirmation] = useState<{
     username: string;
     avatarId: TacticalAvatarId;
@@ -156,6 +164,29 @@ export default function AuthScreen({
       setMode('login');
       setUsername(res.account.username);
       setPassword('');
+      return;
+    }
+
+    if (changingPassword) {
+      if (newPassword !== confirmNewPassword) {
+        setError('New passcode and confirmation do not match.');
+        return;
+      }
+      const pwRes = changeAccountPassword({
+        username,
+        currentPassword: password,
+        newPassword,
+      });
+      if (pwRes.ok === false) {
+        setError(pwRes.error);
+        return;
+      }
+      playPowerUp();
+      setChangingPassword(false);
+      setPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPwSuccessMessage(`Passcode updated for ${pwRes.account.username}. Log in with your new passcode below.`);
       return;
     }
 
@@ -225,6 +256,7 @@ export default function AuthScreen({
               onClick={() => {
                 playUiClick();
                 setMode('login');
+                setShowResetPassword(false);
                 setError(null);
               }}
               className={`tac-bevel-btn py-2.5 rounded-lg text-xs font-display font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
@@ -241,7 +273,10 @@ export default function AuthScreen({
               onClick={() => {
                 playUiClick();
                 setMode('signup');
+                setChangingPassword(false);
+                setShowResetPassword(false);
                 setError(null);
+                setPwSuccessMessage(null);
                 setCreatedConfirmation(null);
               }}
               className={`tac-bevel-btn py-2.5 rounded-lg text-xs font-display font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
@@ -256,7 +291,7 @@ export default function AuthScreen({
           </div>
 
           {/* Account Created -> Operative Login Confirmation Banner */}
-          {mode === 'login' && createdConfirmation && (
+          {mode === 'login' && createdConfirmation && !showResetPassword && (
             <div className="px-3.5 py-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/50 flex items-start gap-2.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-xs leading-relaxed">
@@ -270,6 +305,12 @@ export default function AuthScreen({
             </div>
           )}
 
+          {mode === 'login' && showResetPassword ? (
+            <ResetPasswordPanel
+              defaultEmail={cloudUser?.email}
+              onBackToLogin={() => setShowResetPassword(false)}
+            />
+          ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
             <div>
               <label htmlFor="auth-username" className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5">
@@ -329,10 +370,49 @@ export default function AuthScreen({
               )}
             </div>
 
+            {mode === 'login' && pwSuccessMessage && (
+              <div className="px-3.5 py-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/50 flex items-center gap-2 text-xs text-emerald-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{pwSuccessMessage}</span>
+              </div>
+            )}
+
             <div>
-              <label htmlFor="auth-password" className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5">
-                Access Passcode (Password)
-              </label>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label htmlFor="auth-password" className="block text-xs font-display uppercase tracking-wider text-zinc-300">
+                  {changingPassword ? 'Current Passcode' : 'Access Passcode (Password)'}
+                </label>
+                {mode === 'login' && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playUiClick();
+                        setChangingPassword(false);
+                        setError(null);
+                        setPwSuccessMessage(null);
+                        setShowResetPassword(true);
+                      }}
+                      className="text-[11px] font-mono text-amber-300 hover:text-amber-200 cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playUiClick();
+                        setChangingPassword((prev) => !prev);
+                        setError(null);
+                        setPwSuccessMessage(null);
+                      }}
+                      className="text-[11px] font-mono text-cyan-300 hover:text-cyan-200 inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <KeyRound className="w-3 h-3" />
+                      <span>{changingPassword ? 'Back to Login' : 'Change Passcode'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -340,11 +420,48 @@ export default function AuthScreen({
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimum 4 characters"
+                  placeholder={changingPassword ? 'Enter current passcode' : 'Minimum 4 characters'}
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400"
                 />
               </div>
             </div>
+
+            {mode === 'login' && changingPassword && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label htmlFor="auth-new-password" className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5">
+                    New Passcode
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="auth-new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min 4 chars"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="auth-confirm-password" className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5">
+                    Confirm Passcode
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="auth-confirm-password"
+                      type="password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      placeholder="Re-enter"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {mode === 'signup' && (
               <div>
@@ -403,6 +520,8 @@ export default function AuthScreen({
                   <span>
                     {mode === 'signup'
                       ? 'Create Operative Account'
+                      : changingPassword
+                      ? 'Update Operative Passcode'
                       : createdConfirmation
                       ? 'Confirm Operative Login'
                       : 'Authenticate & Deploy'}
@@ -412,6 +531,7 @@ export default function AuthScreen({
               )}
             </button>
           </form>
+          )}
 
           {/* Cloud Storage Database (Firestore) Connector */}
           <div className="rounded-xl bg-zinc-950/85 border border-cyan-500/30 p-3.5 flex flex-col gap-2.5">

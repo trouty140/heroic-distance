@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Loader2,
   ExternalLink,
+  KeyRound,
 } from 'lucide-react';
 import { FIREBASE_AUTH_DOMAINS_URL } from '../services/operativeCloudDb';
 import type { PlayerLoadout, UserAccount } from '../types';
@@ -30,6 +31,7 @@ interface PlayerProfileCardProps {
   onUpdateBio: (nextBio: string) => void;
   onSignOut: () => void;
   onOpenAccountSwitcher?: () => void;
+  onOpenChangePassword?: () => void;
   cloudUser: FirebaseUser | null;
   cloudSyncState: CloudSyncStatus;
   cloudBusy: boolean;
@@ -46,6 +48,7 @@ export default function PlayerProfileCard({
   onUpdateBio,
   onSignOut,
   onOpenAccountSwitcher,
+  onOpenChangePassword,
   cloudUser,
   cloudSyncState,
   cloudBusy,
@@ -77,10 +80,24 @@ export default function PlayerProfileCard({
             <TacticalAvatarCrest avatarId={account.avatarId} size={40} />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="font-display font-bold text-sm text-white truncate tracking-wide">
                 {account.username}
               </span>
+              {!isGuestPass && onOpenChangePassword && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playUiClick();
+                    onOpenChangePassword();
+                  }}
+                  aria-label="Change username or passcode"
+                  title="Change Username / Passcode"
+                  className="text-zinc-500 hover:text-amber-300 cursor-pointer shrink-0"
+                >
+                  <Edit3 className="w-3 h-3" />
+                </button>
+              )}
               <span
                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border"
                 style={{
@@ -144,7 +161,21 @@ export default function PlayerProfileCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
+          {!isGuestPass && onOpenChangePassword && (
+            <button
+              type="button"
+              onClick={() => {
+                playUiClick();
+                onOpenChangePassword();
+              }}
+              title="Change Username & Passcode"
+              className="tac-bevel-btn px-2 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/45 text-[11px] text-cyan-300 flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <KeyRound className="w-3 h-3" />
+              <span>Account</span>
+            </button>
+          )}
           {onOpenAccountSwitcher && (
             <button
               type="button"

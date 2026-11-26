@@ -38,7 +38,7 @@ import GameCanvas, {
   type VirtualControlInput,
 } from './components/GameCanvas';
 import PvpArena from './components/PvpArena';
-import SettingsModal from './components/SettingsModal';
+import SettingsModal, { type SettingsTab } from './components/SettingsModal';
 import ArmoryModal from './components/ArmoryModal';
 import LeaderboardModal from './components/LeaderboardModal';
 import PrivateLinkModal from './components/PrivateLinkModal';
@@ -87,6 +87,7 @@ export default function App() {
   const [playerName, setPlayerName] = useState(() => account?.username || 'VanguardOne');
   const [isPaused, setIsPaused] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('graphics');
   const [armoryOpen, setArmoryOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [privateLinkOpen, setPrivateLinkOpen] = useState(false);
@@ -784,10 +785,11 @@ export default function App() {
     setSettings((prev) => ({ ...prev, world }));
   };
 
-  const handleOpenSettings = () => {
+  const handleOpenSettings = (tab: SettingsTab = 'graphics') => {
     if (phase === 'PLAYING') {
       setIsPaused(true);
     }
+    setSettingsInitialTab(tab);
     setSettingsOpen(true);
   };
 
@@ -1012,6 +1014,7 @@ export default function App() {
                 onUpdateBio={handleUpdateBio}
                 onSignOut={() => handleSignOut('login')}
                 onOpenAccountSwitcher={() => setAccountLoginOpen(true)}
+                onOpenChangePassword={() => handleOpenSettings('account')}
                 cloudUser={cloudUser}
                 cloudSyncState={cloudSyncState}
                 cloudBusy={cloudBusy}
@@ -1027,7 +1030,7 @@ export default function App() {
                 loadout={loadout}
                 pvpRooms={pvpRooms}
                 onSelectWorld={handleWorldSelect}
-                onOpenSettings={handleOpenSettings}
+                onOpenSettings={() => handleOpenSettings('graphics')}
                 onOpenArmory={handleOpenArmory}
                 onOpenLeaderboard={() => setLeaderboardOpen(true)}
                 onOpenPrivateLink={() => setPrivateLinkOpen(true)}
@@ -1091,7 +1094,7 @@ export default function App() {
                   onPauseToggle={handlePauseToggle}
                   isPaused={isPaused}
                   onQuit={handleQuitGame}
-                  onOpenSettings={handleOpenSettings}
+                  onOpenSettings={() => handleOpenSettings('graphics')}
                   settings={settings}
                 />
 
@@ -1163,7 +1166,7 @@ export default function App() {
                 characterClass={characterClass}
                 loadout={loadout}
                 settings={settings}
-                onOpenSettings={handleOpenSettings}
+                onOpenSettings={() => handleOpenSettings('graphics')}
                 onWorldSwitch={handleWorldSelect}
                 onKillReward={handlePvpKillReward}
                 onExit={handleQuitGame}
@@ -1238,6 +1241,13 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onUpdateSettings={setSettings}
+        initialTab={settingsInitialTab}
+        account={account}
+        isGuestPass={Boolean(guestPassExpiresAt)}
+        onAccountUpdated={(updated) => {
+          setAccount(updated);
+          setPlayerName(updated.username);
+        }}
       />
 
       <ArmoryModal

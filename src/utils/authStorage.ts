@@ -202,6 +202,109 @@ export function loginAccount(opts: {
   return { ok: true, account: found };
 }
 
+export function changeAccountPassword(opts: {
+  username: string;
+  currentPassword: string;
+  newPassword: string;
+}): { ok: true; account: UserAccount } | { ok: false; error: string } {
+  const cleanName = opts.username.trim();
+  if (!cleanName) {
+    return { ok: false, error: 'Enter your operative callsign.' };
+  }
+  const map = readAccountsMap();
+  const key = cleanName.toLowerCase();
+  const found = map[key];
+  if (!found) {
+    return { ok: false, error: 'Operative callsign not found.' };
+  }
+
+  const hasExistingHash = Boolean(found.passwordHash);
+  if (hasExistingHash) {
+    if (!opts.currentPassword) {
+      return { ok: false, error: 'Enter your current passcode.' };
+    }
+    if (found.passwordHash !== hashPasswordSync(found.username, opts.currentPassword)) {
+      return { ok: false, error: 'Current passcode is incorrect.' };
+    }
+  }
+
+  if (opts.newPassword.length < 4) {
+    return { ok: false, error: 'New passcode must be at least 4 characters.' };
+  }
+  if (hasExistingHash && opts.newPassword === opts.currentPassword) {
+    return { ok: false, error: 'New passcode must be different from your current passcode.' };
+  }
+
+  const updated: UserAccount = {
+    ...found,
+    passwordHash: hashPasswordSync(found.username, opts.newPassword),
+  };
+  map[key] = updated;
+  writeAccountsMap(map);
+  return { ok: true, account: updated };
+}
+
+export function renameAccountUsername(opts: {
+  currentUsername: string;
+  newUsername: string;
+  currentPassword: string;
+}): { ok: true; account: UserAccount } | { ok: false; error: string } {
+  const oldClean = opts.currentUsername.trim();
+  const newClean = opts.newUsername.trim();
+
+  if (newClean.length < 3 || newClean.length > 18) {
+    return { ok: false, error: 'Callsign must be between 3 and 18 characters.' };
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(newClean)) {
+    return { ok: false, error: 'Use only letters, numbers, underscores, or hyphens.' };
+  }
+
+  const map = readAccountsMap();
+  const oldKey = oldClean.toLowerCase();
+  const newKey = newClean.toLowerCase();
+  const found = map[oldKey];
+  if (!found) {
+    return { ok: false, error: 'Operative account not found.' };
+  }
+  if (newClean === found.username) {
+    return { ok: false, error: 'Enter a different callsign to update your username.' };
+  }
+  if (newKey !== oldKey && map[newKey]) {
+    return { ok: false, error: 'An operative with that callsign already exists.' };
+  }
+
+  let nextPasswordHash = found.passwordHash;
+  if (found.passwordHash) {
+    if (!opts.currentPassword) {
+      return { ok: false, error: 'Enter your current passcode to confirm callsign change.' };
+    }
+    if (found.passwordHash !== hashPasswordSync(found.username, opts.currentPassword)) {
+      return { ok: false, error: 'Current passcode is incorrect.' };
+    }
+    nextPasswordHash = hashPasswordSync(newClean, opts.currentPassword);
+  }
+
+  const updated: UserAccount = {
+    ...found,
+    username: newClean,
+    passwordHash: nextPasswordHash,
+  };
+
+  if (newKey !== oldKey) {
+    delete map[oldKey];
+  }
+  map[newKey] = updated;
+  writeAccountsMap(map);
+
+  try {
+    if ((getActiveSessionUsername() || '').toLowerCase() === oldKey) {
+      localStorage.setItem(SESSION_KEY, updated.username);
+    }
+  } catch {}
+
+  return { ok: true, account: updated };
+}
+
 export function updateActiveAccount(
   updater: (prev: UserAccount) => UserAccount
 ): UserAccount | null {

@@ -19,6 +19,7 @@ import {
   loginAccount,
 } from '../utils/authStorage';
 import { TacticalAvatarCrest } from './AuthScreen';
+import ResetPasswordPanel from './ResetPasswordPanel';
 import { playPowerUp, playUiClick } from '../utils/audio';
 import { formatCloudErrorMessage } from '../services/operativeCloudDb';
 
@@ -56,6 +57,7 @@ export default function AccountLoginModal({
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -68,6 +70,7 @@ export default function AccountLoginModal({
     setPassword('');
     setError(null);
     setSubmitting(false);
+    setShowResetPassword(false);
   }, [isOpen, currentUsername]);
 
   if (!isOpen) return null;
@@ -267,85 +270,108 @@ export default function AccountLoginModal({
             </div>
           </div>
 
-          {/* Right: Callsign + Passcode Login Form */}
-          <form onSubmit={handleSubmit} className="md:col-span-6 tac-panel border border-zinc-800 rounded-xl p-4 flex flex-col justify-between gap-3.5">
-            <div className="flex flex-col gap-3">
-              <div>
-                <label htmlFor="modal-login-username" className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5">
-                  Callsign (Username)
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="modal-login-username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    maxLength={18}
-                    placeholder="Enter existing callsign"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="modal-login-password" className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5">
-                  Access Passcode
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="modal-login-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your passcode"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              {error && (
-                <div className="px-3 py-2 rounded-lg bg-rose-950/70 border border-rose-500/60 text-xs text-rose-200">
-                  {error}
-                </div>
-              )}
+          {/* Right: Callsign + Passcode Login Form OR Firebase Reset Password Flow */}
+          {showResetPassword ? (
+            <div className="md:col-span-6">
+              <ResetPasswordPanel
+                compact
+                defaultEmail={cloudUser?.email}
+                onBackToLogin={() => setShowResetPassword(false)}
+              />
             </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="md:col-span-6 tac-panel border border-zinc-800 rounded-xl p-4 flex flex-col justify-between gap-3.5">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label htmlFor="modal-login-username" className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5">
+                    Callsign (Username)
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="modal-login-username"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      maxLength={18}
+                      placeholder="Enter existing callsign"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
 
-            <div className="flex flex-col gap-2 pt-2">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="tac-bevel-btn w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-zinc-950 font-display font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Signing In...</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn className="w-4 h-4" />
-                    <span>Login & Switch Account</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </>
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <label htmlFor="modal-login-password" className="block text-xs font-display uppercase tracking-wider text-zinc-300">
+                      Access Passcode
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playUiClick();
+                        setError(null);
+                        setShowResetPassword(true);
+                      }}
+                      className="text-[11px] font-mono text-cyan-300 hover:text-cyan-200 cursor-pointer transition-colors"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="modal-login-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your passcode"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="px-3 py-2 rounded-lg bg-rose-950/70 border border-rose-500/60 text-xs text-rose-200">
+                    {error}
+                  </div>
                 )}
-              </button>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  playUiClick();
-                  onClose();
-                  onSwitchToCreateAccount();
-                }}
-                className="tac-bevel-btn w-full py-2 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-display font-semibold uppercase tracking-wider text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-              >
-                <UserPlus className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Create New Account Instead</span>
-              </button>
-            </div>
-          </form>
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="tac-bevel-btn w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-zinc-950 font-display font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Signing In...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Login & Switch Account</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    playUiClick();
+                    onClose();
+                    onSwitchToCreateAccount();
+                  }}
+                  className="tac-bevel-btn w-full py-2 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-display font-semibold uppercase tracking-wider text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Create New Account Instead</span>
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>

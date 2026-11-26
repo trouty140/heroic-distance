@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X,
   CloudRain,
@@ -18,16 +18,26 @@ import {
   Wind,
   Shield,
   Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  CheckCircle2,
+  User,
 } from 'lucide-react';
 import type {
   GameSettings,
   GraphicsQuality,
   TouchControlsMode,
+  UserAccount,
   WeatherCondition,
   WorldId,
 } from '../types';
 import { WORLD_LIST, WEATHER_OPTIONS } from '../config/worlds';
-import { playSlash, playUiClick } from '../utils/audio';
+import { changeAccountPassword, renameAccountUsername } from '../utils/authStorage';
+import { TacticalAvatarCrest } from './AuthScreen';
+import { playPowerUp, playSlash, playUiClick } from '../utils/audio';
+
+export type SettingsTab = 'graphics' | 'worlds' | 'controls' | 'account';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -35,9 +45,11 @@ interface SettingsModalProps {
   settings: GameSettings;
   onUpdateSettings: (next: GameSettings) => void;
   onWorldChange?: (world: WorldId) => void;
+  initialTab?: SettingsTab;
+  account?: UserAccount | null;
+  isGuestPass?: boolean;
+  onAccountUpdated?: (account: UserAccount) => void;
 }
-
-type SettingsTab = 'graphics' | 'worlds' | 'controls';
 
 export default function SettingsModal({
   isOpen,
@@ -45,11 +57,107 @@ export default function SettingsModal({
   settings,
   onUpdateSettings,
   onWorldChange,
+  initialTab,
+  account,
+  isGuestPass = false,
+  onAccountUpdated,
 }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('graphics');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'graphics');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState<string | null>(null);
+  const [newUsername, setNewUsername] = useState(account?.username || '');
+  const [renamePassword, setRenamePassword] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameSuccess, setRenameSuccess] = useState<string | null>(null);
+
+  const canManageAccount = Boolean(account && !isGuestPass);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialTab && (initialTab !== 'account' || canManageAccount)) {
+      setActiveTab(initialTab);
+    } else if (!canManageAccount && activeTab === 'account') {
+      setActiveTab('graphics');
+    }
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowPasswords(false);
+    setPwError(null);
+    setPwSuccess(null);
+    setNewUsername(account?.username || '');
+    setRenamePassword('');
+    setRenameError(null);
+    setRenameSuccess(null);
+  }, [isOpen, initialTab, canManageAccount, account?.username]);
 
   if (!isOpen) return null;
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    playUiClick();
+    setPwError(null);
+    setPwSuccess(null);
+
+    if (!account) {
+      setPwError('No active operative account found.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New passcode and confirmation do not match.');
+      return;
+    }
+
+    const res = changeAccountPassword({
+      username: account.username,
+      currentPassword,
+      newPassword,
+    });
+    if (res.ok === false) {
+      setPwError(res.error);
+      return;
+    }
+
+    playPowerUp();
+    onAccountUpdated?.(res.account);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPwSuccess(`Passcode updated for ${res.account.username}. Use your new passcode next time you log in.`);
+  };
+
+  const handleUsernameSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    playUiClick();
+    setRenameError(null);
+    setRenameSuccess(null);
+
+    if (!account) {
+      setRenameError('No active operative account found.');
+      return;
+    }
+
+    const res = renameAccountUsername({
+      currentUsername: account.username,
+      newUsername,
+      currentPassword: renamePassword,
+    });
+    if (res.ok === false) {
+      setRenameError(res.error);
+      return;
+    }
+
+    playPowerUp();
+    onAccountUpdated?.(res.account);
+    setNewUsername(res.account.username);
+    setRenamePassword('');
+    setRenameSuccess(`Callsign updated to ${res.account.username}.`);
+  };
 
   const handleQualityPreset = (quality: GraphicsQuality) => {
     playUiClick();
@@ -132,6 +240,15 @@ export default function SettingsModal({
                 label: 'Controls',
                 icon: <Gamepad2 className="w-3.5 h-3.5" />,
               },
+              ...(canManageAccount
+                ? [
+                    {
+                      id: 'account' as const,
+                      label: 'Username & Passcode',
+                      icon: <KeyRound className="w-3.5 h-3.5" />,
+                    },
+                  ]
+                : []),
             ] as const
           ).map((tab) => {
             const selected = activeTab === tab.id;
@@ -675,6 +792,232 @@ export default function SettingsModal({
                 ))}
               </div>
             </section>
+          </div>
+        )}
+
+        {/* TAB 4: ACCOUNT & PASSCODE */}
+        {activeTab === 'account' && account && !isGuestPass && (
+          <div className="relative z-10 flex flex-col gap-4">
+            <div className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <TacticalAvatarCrest avatarId={account.avatarId} size={40} />
+                <div className="min-w-0">
+                  <div className="font-display font-bold text-sm text-white truncate">
+                    {account.username}
+                  </div>
+                  <div className="text-[11px] font-mono text-zinc-400">
+                    {account.passwordHash
+                      ? 'Local passcode protection enabled'
+                      : 'Cloud-restored operative · Set a local passcode below'}
+                  </div>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/40 text-[10px] font-mono font-bold uppercase text-amber-300 shrink-0">
+                Active Operative
+              </span>
+            </div>
+
+            <form
+              onSubmit={handleUsernameSubmit}
+              className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                  <User className="w-4 h-4 text-cyan-400" />
+                  <span>Change Callsign (Username)</span>
+                </div>
+                <span className="text-[10px] font-mono text-zinc-400">
+                  3–18 chars · letters, numbers, _ or -
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="settings-new-username"
+                    className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5"
+                  >
+                    New Callsign (Username)
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="settings-new-username"
+                      type="text"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      maxLength={18}
+                      placeholder="Enter new callsign"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+
+                {Boolean(account.passwordHash) && (
+                  <div>
+                    <label
+                      htmlFor="settings-rename-password"
+                      className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5"
+                    >
+                      Confirm with Passcode
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        id="settings-rename-password"
+                        type={showPasswords ? 'text' : 'password'}
+                        value={renamePassword}
+                        onChange={(e) => setRenamePassword(e.target.value)}
+                        placeholder="Enter current passcode"
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {renameError && (
+                <div className="px-3 py-2 rounded-lg bg-rose-950/70 border border-rose-500/60 text-xs text-rose-200">
+                  {renameError}
+                </div>
+              )}
+
+              {renameSuccess && (
+                <div className="px-3 py-2 rounded-lg bg-emerald-950/70 border border-emerald-500/50 text-xs text-emerald-200 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{renameSuccess}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  className="tac-bevel-btn px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-display font-bold uppercase tracking-wider text-xs flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Update Username</span>
+                </button>
+              </div>
+            </form>
+
+            <form
+              onSubmit={handlePasswordSubmit}
+              className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  <span>Change Account Passcode</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playUiClick();
+                    setShowPasswords((prev) => !prev);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-mono text-zinc-300 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {showPasswords ? (
+                    <>
+                      <EyeOff className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Hide</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Show</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {Boolean(account.passwordHash) && (
+                <div>
+                  <label
+                    htmlFor="settings-current-password"
+                    className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5"
+                  >
+                    Current Passcode
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="settings-current-password"
+                      type={showPasswords ? 'text' : 'password'}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current passcode"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="settings-new-password"
+                    className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5"
+                  >
+                    New Passcode
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="settings-new-password"
+                      type={showPasswords ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 4 characters"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="settings-confirm-password"
+                    className="block text-xs font-display uppercase tracking-wider text-zinc-300 mb-1.5"
+                  >
+                    Confirm New Passcode
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="settings-confirm-password"
+                      type={showPasswords ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new passcode"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {pwError && (
+                <div className="px-3 py-2 rounded-lg bg-rose-950/70 border border-rose-500/60 text-xs text-rose-200">
+                  {pwError}
+                </div>
+              )}
+
+              {pwSuccess && (
+                <div className="px-3 py-2 rounded-lg bg-emerald-950/70 border border-emerald-500/50 text-xs text-emerald-200 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{pwSuccess}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  className="tac-bevel-btn px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-display font-bold uppercase tracking-wider text-xs flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>{account.passwordHash ? 'Update Passcode' : 'Set Passcode'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
