@@ -99,6 +99,12 @@ export function listSavedUsernames(): string[] {
   return Object.values(readAccountsMap()).map((u) => u.username);
 }
 
+export function listSavedAccounts(): UserAccount[] {
+  return Object.values(readAccountsMap()).sort(
+    (a, b) => (b.stats?.highestDistance || 0) - (a.stats?.highestDistance || 0)
+  );
+}
+
 export function registerAccount(opts: {
   username: string;
   password: string;

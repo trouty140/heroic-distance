@@ -42,6 +42,7 @@ import SettingsModal from './components/SettingsModal';
 import ArmoryModal from './components/ArmoryModal';
 import LeaderboardModal from './components/LeaderboardModal';
 import PrivateLinkModal from './components/PrivateLinkModal';
+import AccountLoginModal from './components/AccountLoginModal';
 import { DEFAULT_GAME_SETTINGS } from './config/worlds';
 import { DEFAULT_LOADOUT, DEFAULT_OWNED_ITEMS } from './config/armory';
 import {
@@ -89,6 +90,8 @@ export default function App() {
   const [armoryOpen, setArmoryOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [privateLinkOpen, setPrivateLinkOpen] = useState(false);
+  const [accountLoginOpen, setAccountLoginOpen] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup' | undefined>(undefined);
   const [guestPassExpiresAt, setGuestPassExpiresAt] = useState<number | null>(null);
   const [guestPassExpired, setGuestPassExpired] = useState(false);
   const [guestRemainingSec, setGuestRemainingSec] = useState(0);
@@ -457,6 +460,8 @@ export default function App() {
     });
     setStats(loggedIn.stats);
     setDailyMissions(ensureTodayDailyMissions(loggedIn.dailyMissions));
+    setAuthInitialMode(undefined);
+    setAccountLoginOpen(false);
     setPhase('MENU');
   };
 
@@ -549,16 +554,18 @@ export default function App() {
     handleAuthenticated(activated);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = (nextAuthMode?: 'login' | 'signup') => {
     signOutAccount();
     setAccount(null);
     setGuestPassExpiresAt(null);
+    setAuthInitialMode(nextAuthMode);
     setPhase('MENU');
     setIsPaused(false);
     setSettingsOpen(false);
     setArmoryOpen(false);
     setLeaderboardOpen(false);
     setPrivateLinkOpen(false);
+    setAccountLoginOpen(false);
   };
 
   const showCallout = (msg: string, durationMs = 2600) => {
@@ -977,6 +984,7 @@ export default function App() {
           </div>
         ) : !account ? (
           <AuthScreen
+            initialMode={authInitialMode}
             onAuthenticated={handleAuthenticated}
             cloudUser={cloudUser}
             cloudProfile={cloudProfile}
@@ -1002,7 +1010,8 @@ export default function App() {
               <IntroScreen
                 account={account}
                 onUpdateBio={handleUpdateBio}
-                onSignOut={handleSignOut}
+                onSignOut={() => handleSignOut('login')}
+                onOpenAccountSwitcher={() => setAccountLoginOpen(true)}
                 cloudUser={cloudUser}
                 cloudSyncState={cloudSyncState}
                 cloudBusy={cloudBusy}
@@ -1260,6 +1269,21 @@ export default function App() {
       <PrivateLinkModal
         isOpen={privateLinkOpen}
         onClose={() => setPrivateLinkOpen(false)}
+      />
+
+      <AccountLoginModal
+        isOpen={accountLoginOpen && Boolean(account)}
+        onClose={() => setAccountLoginOpen(false)}
+        currentUsername={account?.username || ''}
+        onAuthenticated={handleAuthenticated}
+        onSwitchToCreateAccount={() => handleSignOut('signup')}
+        cloudUser={cloudUser}
+        cloudProfile={cloudProfile}
+        cloudBusy={cloudBusy}
+        cloudError={cloudError}
+        onConnectCloudDb={handleConnectCloudDb}
+        onDeployCloudProfile={handleDeployCloudProfile}
+        onSyncAccountToCloud={handleSyncAccountToCloud}
       />
     </div>
   );

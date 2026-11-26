@@ -6,6 +6,7 @@ import {
   Check,
   X,
   LogOut,
+  LogIn,
   Crosshair,
   Trophy,
   Database,
@@ -28,6 +29,7 @@ interface PlayerProfileCardProps {
   loadout: PlayerLoadout;
   onUpdateBio: (nextBio: string) => void;
   onSignOut: () => void;
+  onOpenAccountSwitcher?: () => void;
   cloudUser: FirebaseUser | null;
   cloudSyncState: CloudSyncStatus;
   cloudBusy: boolean;
@@ -43,6 +45,7 @@ export default function PlayerProfileCard({
   loadout,
   onUpdateBio,
   onSignOut,
+  onOpenAccountSwitcher,
   cloudUser,
   cloudSyncState,
   cloudBusy,
@@ -141,17 +144,33 @@ export default function PlayerProfileCard({
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            playUiClick();
-            onSignOut();
-          }}
-          title="Switch / Sign Out Account"
-          className="tac-bevel-btn px-2 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-[11px] text-zinc-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer shrink-0 transition-colors"
-        >
-          <LogOut className="w-3 h-3" />
-          <span>Sign Out</span>
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onOpenAccountSwitcher && (
+            <button
+              type="button"
+              onClick={() => {
+                playUiClick();
+                onOpenAccountSwitcher();
+              }}
+              title="Login to Existing / Another Account"
+              className="tac-bevel-btn px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/45 text-[11px] text-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <LogIn className="w-3 h-3" />
+              <span>Switch</span>
+            </button>
+          )}
+          <button
+            onClick={() => {
+              playUiClick();
+              onSignOut();
+            }}
+            title="Sign Out Account"
+            className="tac-bevel-btn px-2 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-[11px] text-zinc-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <LogOut className="w-3 h-3" />
+            <span>Sign Out</span>
+          </button>
+        </div>
       </div>
 
       {/* Rank XP bar + Quick Stats */}

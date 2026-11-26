@@ -45,6 +45,7 @@ import {
   DAILY_MISSIONS,
   countClaimableDailyMissions,
   ensureTodayDailyMissions,
+  formatDailyMissionProgressLabel,
   getTimeUntilDailyReset,
 } from '../config/dailyMissions';
 import { PedestalCardCanvas3D, PedestalInspector3D } from '../three/StorePedestal3D';
@@ -627,25 +628,59 @@ export default function ArmoryModal({
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 flex flex-col gap-1">
-                        <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-zinc-300">
-                          <span>Progress</span>
-                          <span className={isComplete ? 'text-emerald-400 font-bold' : 'text-zinc-200'}>
-                            {progress} / {mission.target}
-                            {mission.unitLabel || ''}
+                      <div className="flex-1 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-2 text-[11px] font-mono tabular-nums">
+                          <span
+                            className={
+                              isClaimed
+                                ? 'text-zinc-400'
+                                : isComplete
+                                ? 'text-emerald-300 font-bold'
+                                : 'text-zinc-200 font-semibold'
+                            }
+                          >
+                            {formatDailyMissionProgressLabel(mission, progress)}
+                          </span>
+                          <span
+                            className={
+                              isClaimed
+                                ? 'text-zinc-500'
+                                : isComplete
+                                ? 'text-emerald-400 font-bold'
+                                : 'text-cyan-300'
+                            }
+                          >
+                            {isClaimed
+                              ? 'Completed'
+                              : isComplete
+                              ? 'Ready to Claim!'
+                              : `${mission.target - progress}${mission.unitLabel || ''} left (${pct}%)`}
                           </span>
                         </div>
-                        <div className="h-2 w-full rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
+                        <div
+                          role="progressbar"
+                          aria-label={mission.title}
+                          aria-valuemin={0}
+                          aria-valuemax={mission.target}
+                          aria-valuenow={progress}
+                          className="relative h-3 w-full rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden shadow-inner"
+                        >
                           <div
                             className={`h-full rounded-full transition-all duration-300 ${
                               isClaimed
                                 ? 'bg-zinc-600'
                                 : isComplete
-                                ? 'bg-emerald-400'
-                                : 'bg-cyan-400'
+                                ? 'bg-gradient-to-r from-emerald-500 to-lime-400 shadow-[0_0_12px_rgba(16,185,129,0.7)]'
+                                : 'bg-gradient-to-r from-cyan-500 to-sky-400 shadow-[0_0_10px_rgba(34,211,238,0.45)]'
                             }`}
                             style={{ width: `${pct}%` }}
                           />
+                          {/* Subtle quarter milestone ticks */}
+                          <div className="pointer-events-none absolute inset-0 flex justify-evenly">
+                            <span className="w-px h-full bg-zinc-900/70" />
+                            <span className="w-px h-full bg-zinc-900/70" />
+                            <span className="w-px h-full bg-zinc-900/70" />
+                          </div>
                         </div>
                       </div>
 
@@ -667,7 +702,7 @@ export default function ArmoryModal({
                           <span>Claim</span>
                         </button>
                       ) : (
-                        <span className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-500 font-mono text-[11px] shrink-0">
+                        <span className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-cyan-300 font-mono font-bold text-[11px] shrink-0">
                           {pct}%
                         </span>
                       )}
@@ -697,17 +732,35 @@ export default function ArmoryModal({
               </div>
 
               <div className="bg-zinc-950/90 border border-zinc-800 rounded-xl p-3.5 flex flex-col gap-2.5">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-zinc-400">Objectives Completed</span>
-                  <span className="text-white font-bold">
-                    {
-                      DAILY_MISSIONS.filter(
-                        (m) => (normalizedDaily.progress[m.id] || 0) >= m.target
-                      ).length
-                    }{' '}
-                    / {DAILY_MISSIONS.length}
-                  </span>
-                </div>
+                {(() => {
+                  const doneCount = DAILY_MISSIONS.filter(
+                    (m) => (normalizedDaily.progress[m.id] || 0) >= m.target
+                  ).length;
+                  const overallPct = Math.round(
+                    (DAILY_MISSIONS.reduce(
+                      (acc, m) => acc + Math.min(1, (normalizedDaily.progress[m.id] || 0) / m.target),
+                      0
+                    ) /
+                      DAILY_MISSIONS.length) *
+                      100
+                  );
+                  return (
+                    <>
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="text-zinc-400">Objectives Completed</span>
+                        <span className="text-white font-bold">
+                          {doneCount} / {DAILY_MISSIONS.length} ({overallPct}%)
+                        </span>
+                      </div>
+                      <div className="h-2.5 w-full rounded-full bg-zinc-900 border border-zinc-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-300"
+                          style={{ width: `${overallPct}%` }}
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
                 <div className="flex items-center justify-between text-xs font-mono">
                   <span className="text-zinc-400">Claimed Today</span>
                   <span className="text-emerald-400 font-bold">

@@ -38,6 +38,7 @@ interface IntroScreenProps {
   account: UserAccount;
   onUpdateBio: (nextBio: string) => void;
   onSignOut: () => void;
+  onOpenAccountSwitcher: () => void;
   cloudUser: FirebaseUser | null;
   cloudSyncState: CloudSyncStatus;
   cloudBusy: boolean;
@@ -68,6 +69,7 @@ export default function IntroScreen({
   account,
   onUpdateBio,
   onSignOut,
+  onOpenAccountSwitcher,
   cloudUser,
   cloudSyncState,
   cloudBusy,
@@ -308,6 +310,7 @@ export default function IntroScreen({
               loadout={loadout}
               onUpdateBio={onUpdateBio}
               onSignOut={onSignOut}
+              onOpenAccountSwitcher={onOpenAccountSwitcher}
               cloudUser={cloudUser}
               cloudSyncState={cloudSyncState}
               cloudBusy={cloudBusy}

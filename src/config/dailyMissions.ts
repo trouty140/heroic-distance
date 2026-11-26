@@ -54,6 +54,27 @@ export const DAILY_MISSIONS: DailyMissionDef[] = [
   },
 ];
 
+export function formatDailyMissionProgressLabel(
+  mission: DailyMissionDef,
+  progress: number
+): string {
+  const clamped = Math.min(mission.target, Math.max(0, Math.floor(progress)));
+  switch (mission.objectiveType) {
+    case 'kills':
+      return `${clamped}/${mission.target} enemies defeated`;
+    case 'distance':
+      return `${clamped}/${mission.target}m run`;
+    case 'gold':
+      return `${clamped}/${mission.target} gold collected`;
+    case 'runs':
+      return `${clamped}/${mission.target} missions deployed`;
+    case 'bosses':
+      return `${clamped}/${mission.target} boss defeated`;
+    default:
+      return `${clamped}/${mission.target}`;
+  }
+}
+
 export function getTodayDateKey(now = new Date()): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, '0');

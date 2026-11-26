@@ -21,7 +21,8 @@ import { OPERATOR_ITEMS } from '../config/armory';
 import { PedestalInspector3D } from '../three/StorePedestal3D';
 import {
   TACTICAL_AVATARS,
-  listSavedUsernames,
+  getRankFromStats,
+  listSavedAccounts,
   loginAccount,
   registerAccount,
 } from '../utils/authStorage';
@@ -33,6 +34,7 @@ import {
 
 interface AuthScreenProps {
   onAuthenticated: (account: UserAccount) => void;
+  initialMode?: 'login' | 'signup';
   cloudUser: FirebaseUser | null;
   cloudProfile: UserAccount | null;
   cloudBusy: boolean;
@@ -96,6 +98,7 @@ export function TacticalAvatarCrest({
 
 export default function AuthScreen({
   onAuthenticated,
+  initialMode,
   cloudUser,
   cloudProfile,
   cloudBusy,
@@ -105,9 +108,11 @@ export default function AuthScreen({
   onDeployCloudProfile,
   onSyncAccountToCloud,
 }: AuthScreenProps) {
-  const savedNames = listSavedUsernames();
-  const [mode, setMode] = useState<'login' | 'signup'>(savedNames.length > 0 ? 'login' : 'signup');
-  const [username, setUsername] = useState(savedNames[0] || '');
+  const savedAccounts = listSavedAccounts();
+  const [mode, setMode] = useState<'login' | 'signup'>(
+    initialMode ?? (savedAccounts.length > 0 ? 'login' : 'signup')
+  );
+  const [username, setUsername] = useState(savedAccounts[0]?.username || '');
   const [password, setPassword] = useState('');
   const [avatarId, setAvatarId] = useState<TacticalAvatarId>('avatar_specter');
   const [error, setError] = useState<string | null>(null);
@@ -282,22 +287,44 @@ export default function AuthScreen({
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950/90 border border-zinc-700/80 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400"
                 />
               </div>
-              {mode === 'login' && savedNames.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                  <span className="text-[11px] text-zinc-500">Saved:</span>
-                  {savedNames.slice(0, 4).map((name) => (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => {
-                        playUiClick();
-                        setUsername(name);
-                      }}
-                      className="tac-bevel-btn px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] text-cyan-300 font-mono cursor-pointer"
-                    >
-                      {name}
-                    </button>
-                  ))}
+              {mode === 'login' && savedAccounts.length > 0 && (
+                <div className="mt-2.5 flex flex-col gap-1.5">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                    Already Made Accounts — Tap to Select
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-0.5">
+                    {savedAccounts.slice(0, 6).map((acct) => {
+                      const rank = getRankFromStats(acct.stats);
+                      const isPicked =
+                        acct.username.toLowerCase() === username.trim().toLowerCase();
+                      return (
+                        <button
+                          key={acct.username}
+                          type="button"
+                          onClick={() => {
+                            playUiClick();
+                            setUsername(acct.username);
+                            setError(null);
+                          }}
+                          className={`tac-bevel-btn px-2.5 py-1.5 rounded-lg border text-left flex items-center gap-2 cursor-pointer transition-colors ${
+                            isPicked
+                              ? 'bg-amber-500/15 border-amber-400 text-white'
+                              : 'bg-zinc-900/80 hover:bg-zinc-800 border-zinc-700/80 text-zinc-300'
+                          }`}
+                        >
+                          <TacticalAvatarCrest avatarId={acct.avatarId} size={24} />
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-mono font-bold truncate">
+                              {acct.username}
+                            </div>
+                            <div className="text-[9px] font-mono text-zinc-400 truncate">
+                              {rank.tier} · {acct.stats.highestDistance}m
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
