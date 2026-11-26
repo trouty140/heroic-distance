@@ -95,6 +95,31 @@ export type RankTier =
   | 'Grandmaster'
   | 'Legendary';
 
+export type DailyMissionObjectiveType =
+  | 'kills'
+  | 'distance'
+  | 'gold'
+  | 'runs'
+  | 'bosses';
+
+export interface DailyMissionDef {
+  id: string;
+  title: string;
+  description: string;
+  objectiveType: DailyMissionObjectiveType;
+  target: number;
+  unitLabel?: string;
+  rewardCoins: number;
+  rewardCredits: number;
+  tier: 'Recon' | 'Assault' | 'Apex';
+}
+
+export interface DailyMissionsState {
+  dateKey: string;
+  progress: Record<string, number>;
+  claimedIds: string[];
+}
+
 export interface UserAccount {
   username: string;
   passwordHash: string;
@@ -105,6 +130,7 @@ export interface UserAccount {
   wallet: CurrencyWallet;
   ownedItems: string[];
   loadout: PlayerLoadout;
+  dailyMissions?: DailyMissionsState;
 }
 
 export interface CurrencyWallet {

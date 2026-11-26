@@ -12,6 +12,9 @@ import {
   CloudUpload,
   LogOut,
   Loader2,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import type { TacticalAvatarId, UserAccount } from '../types';
 import { OPERATOR_ITEMS } from '../config/armory';
@@ -23,7 +26,10 @@ import {
   registerAccount,
 } from '../utils/authStorage';
 import { playPowerUp, playUiClick } from '../utils/audio';
-import { formatCloudErrorMessage } from '../services/operativeCloudDb';
+import {
+  FIREBASE_AUTH_DOMAINS_URL,
+  formatCloudErrorMessage,
+} from '../services/operativeCloudDb';
 
 interface AuthScreenProps {
   onAuthenticated: (account: UserAccount) => void;
@@ -106,6 +112,7 @@ export default function AuthScreen({
   const [avatarId, setAvatarId] = useState<TacticalAvatarId>('avatar_specter');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [createdConfirmation, setCreatedConfirmation] = useState<{
     username: string;
     avatarId: TacticalAvatarId;
@@ -474,8 +481,43 @@ export default function AuthScreen({
             )}
 
             {cloudError && (
-              <div className="px-2.5 py-1.5 rounded bg-rose-950/70 border border-rose-500/50 text-[11px] text-rose-200">
-                {cloudError}
+              <div className="px-3 py-2 rounded-lg bg-rose-950/75 border border-rose-500/55 text-[11px] text-rose-200 flex flex-col gap-2">
+                <span className="leading-relaxed">{cloudError}</span>
+                {cloudError.includes('Authorized domains') && typeof window !== 'undefined' && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-rose-500/30">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playUiClick();
+                        void navigator.clipboard?.writeText(window.location.hostname);
+                        setCopiedDomain(true);
+                        window.setTimeout(() => setCopiedDomain(false), 2000);
+                      }}
+                      className="tac-bevel-btn px-2 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-rose-400/45 text-[10px] font-mono text-white inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedDomain ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span>Copied: {window.location.hostname}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3 text-cyan-300" />
+                          <span>Copy: {window.location.hostname}</span>
+                        </>
+                      )}
+                    </button>
+                    <a
+                      href={FIREBASE_AUTH_DOMAINS_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="tac-bevel-btn px-2 py-1 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-[10px] font-display font-bold uppercase tracking-wider text-cyan-200 inline-flex items-center gap-1"
+                    >
+                      <span>Firebase Domains</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
               </div>
             )}
           </div>

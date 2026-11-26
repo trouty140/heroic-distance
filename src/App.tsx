@@ -4,6 +4,7 @@ import type {
   BossHudState,
   BossId,
   CurrencyWallet,
+  DailyMissionsState,
   DroneHudState,
   DroneModelId,
   FloatingDamage,
@@ -43,6 +44,12 @@ import LeaderboardModal from './components/LeaderboardModal';
 import PrivateLinkModal from './components/PrivateLinkModal';
 import { DEFAULT_GAME_SETTINGS } from './config/worlds';
 import { DEFAULT_LOADOUT, DEFAULT_OWNED_ITEMS } from './config/armory';
+import {
+  DAILY_MISSIONS,
+  advanceDailyMissionProgress,
+  countClaimableDailyMissions,
+  ensureTodayDailyMissions,
+} from './config/dailyMissions';
 import {
   activateCloudAccount,
   createGuestAccount,
@@ -200,6 +207,10 @@ export default function App() {
         highestDistance: 0,
       }
   );
+  const [dailyMissions, setDailyMissions] = useState<DailyMissionsState>(() =>
+    ensureTodayDailyMissions(account?.dailyMissions)
+  );
+  const lastRunDistRef = useRef<number>(0);
 
   const [lastSupplyClaim, setLastSupplyClaim] = useState<number>(() => {
     try {
@@ -358,7 +369,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Persist account wallet, ownedItems, loadout, and stats inside localStorage account record
+  // Persist account wallet, ownedItems, loadout, stats, and dailyMissions inside localStorage account record
   useEffect(() => {
     if (!account) return;
     const updated = updateActiveAccount((prev) => ({
@@ -367,11 +378,12 @@ export default function App() {
       ownedItems,
       loadout,
       stats,
+      dailyMissions,
     }));
     if (updated) {
       setAccount(updated);
     }
-  }, [wallet, ownedItems, loadout, stats]);
+  }, [wallet, ownedItems, loadout, stats, dailyMissions]);
 
   // Debounced sync to Cloud Storage Database when connected (skipped for temporary guest passes)
   useEffect(() => {
@@ -385,6 +397,7 @@ export default function App() {
       ownedItems,
       loadout,
       stats,
+      dailyMissions,
     };
     cloudSyncTimerRef.current = window.setTimeout(async () => {
       setCloudSyncState('syncing');
@@ -403,7 +416,7 @@ export default function App() {
         window.clearTimeout(cloudSyncTimerRef.current);
       }
     };
-  }, [account?.username, account?.bio, account?.avatarId, wallet, ownedItems, loadout, stats, cloudUser, guestPassExpiresAt]);
+  }, [account?.username, account?.bio, account?.avatarId, wallet, ownedItems, loadout, stats, dailyMissions, cloudUser, guestPassExpiresAt]);
 
   // Poll live PvP room counts while on MENU
   useEffect(() => {
@@ -443,6 +456,7 @@ export default function App() {
       droneModelId: loggedIn.loadout?.droneModelId ?? 'drone_sentinel',
     });
     setStats(loggedIn.stats);
+    setDailyMissions(ensureTodayDailyMissions(loggedIn.dailyMissions));
     setPhase('MENU');
   };
 
@@ -460,7 +474,14 @@ export default function App() {
         const fetched = await fetchCloudOperative(cred.user.uid);
         setCloudProfile(fetched);
         if (account && !guestPassExpiresAt) {
-          const snapshot: UserAccount = { ...account, wallet, ownedItems, loadout, stats };
+          const snapshot: UserAccount = {
+            ...account,
+            wallet,
+            ownedItems,
+            loadout,
+            stats,
+            dailyMissions,
+          };
           await upsertCloudOperative(cred.user.uid, snapshot);
           setCloudProfile(snapshot);
         }
@@ -497,7 +518,14 @@ export default function App() {
     setCloudSyncState('syncing');
     setCloudError(null);
     try {
-      const snapshot: UserAccount = { ...account, wallet, ownedItems, loadout, stats };
+      const snapshot: UserAccount = {
+        ...account,
+        wallet,
+        ownedItems,
+        loadout,
+        stats,
+        dailyMissions,
+      };
       await upsertCloudOperative(cloudUser.uid, snapshot);
       setCloudProfile(snapshot);
       setCloudSyncState('synced');
@@ -592,7 +620,9 @@ export default function App() {
       doubleJumpsAdd: 0,
     });
 
+    lastRunDistRef.current = 0;
     setStats((prev) => ({ ...prev, runs: prev.runs + 1 }));
+    setDailyMissions((prev) => advanceDailyMissionProgress(prev, 'runs', 1));
     setIsPaused(false);
     setPhase('PLAYING');
     showCallout("MISSION DEPLOYED · LET'S GO!");
@@ -626,6 +656,13 @@ export default function App() {
   const handlePlayerStateUpdate = (state: PlayerState) => {
     setPlayer(state);
 
+    const floorDist = Math.max(0, Math.floor(state.distance));
+    if (floorDist > lastRunDistRef.current) {
+      const delta = floorDist - lastRunDistRef.current;
+      lastRunDistRef.current = floorDist;
+      setDailyMissions((prev) => advanceDailyMissionProgress(prev, 'distance', delta));
+    }
+
     if (state.distance >= 1600 && !milestonesDone.includes(1600)) {
       setMilestonesDone((prev) => [...prev, 1600]);
       setWallet((prev) => ({ ...prev, coins: prev.coins + 80, credits: prev.credits + 10 }));
@@ -642,6 +679,7 @@ export default function App() {
       coins: prev.coins + 120,
       credits: prev.credits + 20,
     }));
+    setDailyMissions((prev) => advanceDailyMissionProgress(prev, 'bosses', 1));
     showCallout("BOSS VANQUISHED! LET'S GO! (+120 COINS, +20 CREDITS)");
     setIsPaused(true);
     setPhase('UPGRADE');
@@ -657,6 +695,10 @@ export default function App() {
       ...prev,
       coins: prev.coins + goldGained,
     }));
+    setDailyMissions((prev) => {
+      const afterKills = advanceDailyMissionProgress(prev, 'kills', 1);
+      return advanceDailyMissionProgress(afterKills, 'gold', goldGained);
+    });
   };
 
   const handleUpgradeSelect = (upgradeId: UpgradeId) => {
@@ -850,6 +892,48 @@ export default function App() {
     }));
   };
 
+  const handleClaimDailyMission = (missionId: string) => {
+    const mission = DAILY_MISSIONS.find((m) => m.id === missionId);
+    if (!mission) return;
+    const normalized = ensureTodayDailyMissions(dailyMissions);
+    if (
+      (normalized.progress[mission.id] || 0) < mission.target ||
+      normalized.claimedIds.includes(mission.id)
+    ) {
+      return;
+    }
+    Sound.playPowerUp();
+    setDailyMissions({
+      ...normalized,
+      claimedIds: [...normalized.claimedIds, mission.id],
+    });
+    setWallet((prev) => ({
+      coins: prev.coins + mission.rewardCoins,
+      credits: prev.credits + mission.rewardCredits,
+    }));
+  };
+
+  const handleClaimAllDailyMissions = () => {
+    const normalized = ensureTodayDailyMissions(dailyMissions);
+    const ready = DAILY_MISSIONS.filter(
+      (m) =>
+        (normalized.progress[m.id] || 0) >= m.target &&
+        !normalized.claimedIds.includes(m.id)
+    );
+    if (ready.length === 0) return;
+    const bonusCoins = ready.reduce((sum, m) => sum + m.rewardCoins, 0);
+    const bonusCredits = ready.reduce((sum, m) => sum + m.rewardCredits, 0);
+    Sound.playPowerUp();
+    setDailyMissions({
+      ...normalized,
+      claimedIds: [...normalized.claimedIds, ...ready.map((m) => m.id)],
+    });
+    setWallet((prev) => ({
+      coins: prev.coins + bonusCoins,
+      credits: prev.credits + bonusCredits,
+    }));
+  };
+
   const handlePvpKillReward = () => {
     setStats((prev) => ({
       ...prev,
@@ -859,6 +943,7 @@ export default function App() {
       coins: prev.coins + 35,
       credits: prev.credits + 8,
     }));
+    setDailyMissions((prev) => advanceDailyMissionProgress(prev, 'kills', 1));
   };
 
   return (
@@ -921,7 +1006,9 @@ export default function App() {
                 cloudUser={cloudUser}
                 cloudSyncState={cloudSyncState}
                 cloudBusy={cloudBusy}
+                cloudError={cloudError}
                 isGuestPass={Boolean(guestPassExpiresAt)}
+                claimableDailyCount={countClaimableDailyMissions(dailyMissions)}
                 onConnectCloudDb={handleConnectCloudDb}
                 onDisconnectCloudDb={handleDisconnectCloudDb}
                 onSyncCloudNow={handleSyncCloudNow}
@@ -1159,6 +1246,9 @@ export default function App() {
         onToggleGadget={handleToggleGadget}
         onToggleDroneEnabled={handleToggleDroneEnabled}
         onSelectDroneModel={handleSelectDroneModel}
+        dailyMissions={dailyMissions}
+        onClaimDailyMission={handleClaimDailyMission}
+        onClaimAllDailyMissions={handleClaimAllDailyMissions}
       />
 
       <LeaderboardModal

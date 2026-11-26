@@ -12,7 +12,9 @@ import {
   CloudUpload,
   RefreshCw,
   Loader2,
+  ExternalLink,
 } from 'lucide-react';
+import { FIREBASE_AUTH_DOMAINS_URL } from '../services/operativeCloudDb';
 import type { PlayerLoadout, UserAccount } from '../types';
 import { getOperatorById, getWeaponById } from '../config/armory';
 import { getRankFromStats } from '../utils/authStorage';
@@ -29,6 +31,7 @@ interface PlayerProfileCardProps {
   cloudUser: FirebaseUser | null;
   cloudSyncState: CloudSyncStatus;
   cloudBusy: boolean;
+  cloudError?: string | null;
   isGuestPass?: boolean;
   onConnectCloudDb: () => Promise<void>;
   onDisconnectCloudDb: () => Promise<void>;
@@ -43,6 +46,7 @@ export default function PlayerProfileCard({
   cloudUser,
   cloudSyncState,
   cloudBusy,
+  cloudError,
   isGuestPass = false,
   onConnectCloudDb,
   onDisconnectCloudDb,
@@ -254,6 +258,23 @@ export default function PlayerProfileCard({
                 </button>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {!isGuestPass && cloudError && (
+        <div className="px-2.5 py-1.5 rounded-lg bg-rose-950/70 border border-rose-500/50 text-[10px] text-rose-200 flex flex-col gap-1">
+          <span>{cloudError}</span>
+          {cloudError.includes('Authorized domains') && (
+            <a
+              href={FIREBASE_AUTH_DOMAINS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-cyan-300 hover:text-cyan-200 inline-flex items-center gap-1 font-mono underline"
+            >
+              <span>Open Firebase Authorized Domains</span>
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
           )}
         </div>
       )}

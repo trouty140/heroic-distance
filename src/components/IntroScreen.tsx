@@ -41,7 +41,9 @@ interface IntroScreenProps {
   cloudUser: FirebaseUser | null;
   cloudSyncState: CloudSyncStatus;
   cloudBusy: boolean;
+  cloudError?: string | null;
   isGuestPass?: boolean;
+  claimableDailyCount?: number;
   onConnectCloudDb: () => Promise<void>;
   onDisconnectCloudDb: () => Promise<void>;
   onSyncCloudNow: () => Promise<void>;
@@ -69,7 +71,9 @@ export default function IntroScreen({
   cloudUser,
   cloudSyncState,
   cloudBusy,
+  cloudError,
   isGuestPass,
+  claimableDailyCount = 0,
   onConnectCloudDb,
   onDisconnectCloudDb,
   onSyncCloudNow,
@@ -198,6 +202,11 @@ export default function IntroScreen({
           >
             <Briefcase className="w-3.5 h-3.5" />
             <span>3D Armory</span>
+            {claimableDailyCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-zinc-950 text-emerald-300 text-[10px] font-mono font-bold">
+                {claimableDailyCount} Daily
+              </span>
+            )}
           </button>
 
           <button
@@ -302,6 +311,7 @@ export default function IntroScreen({
               cloudUser={cloudUser}
               cloudSyncState={cloudSyncState}
               cloudBusy={cloudBusy}
+              cloudError={cloudError}
               isGuestPass={isGuestPass}
               onConnectCloudDb={onConnectCloudDb}
               onDisconnectCloudDb={onDisconnectCloudDb}

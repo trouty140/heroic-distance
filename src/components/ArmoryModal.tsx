@@ -14,9 +14,13 @@ import {
   Radar,
   HeartPulse,
   Power,
+  Target,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import type {
   CurrencyWallet,
+  DailyMissionsState,
   DroneModelId,
   GadgetId,
   ItemRarity,
@@ -37,8 +41,14 @@ import {
   getOperatorById,
   getWeaponById,
 } from '../config/armory';
+import {
+  DAILY_MISSIONS,
+  countClaimableDailyMissions,
+  ensureTodayDailyMissions,
+  getTimeUntilDailyReset,
+} from '../config/dailyMissions';
 import { PedestalCardCanvas3D, PedestalInspector3D } from '../three/StorePedestal3D';
-import { playUiClick } from '../utils/audio';
+import { playPowerUp, playUiClick } from '../utils/audio';
 
 interface ArmoryModalProps {
   isOpen: boolean;
@@ -55,6 +65,9 @@ interface ArmoryModalProps {
   onToggleGadget: (id: GadgetId, targetSlot?: 0 | 1) => void;
   onToggleDroneEnabled: () => void;
   onSelectDroneModel: (id: DroneModelId) => void;
+  dailyMissions: DailyMissionsState;
+  onClaimDailyMission: (missionId: string) => void;
+  onClaimAllDailyMissions: () => void;
 }
 
 const RARITY_STYLES: Record<
@@ -116,11 +129,24 @@ export default function ArmoryModal({
   onToggleGadget,
   onToggleDroneEnabled,
   onSelectDroneModel,
+  dailyMissions,
+  onClaimDailyMission,
+  onClaimAllDailyMissions,
 }: ArmoryModalProps) {
-  const [activeTab, setActiveTab] = useState<StoreCategory>('operators');
+  const [activeTab, setActiveTab] = useState<StoreCategory | 'daily'>('operators');
   const [activeGadgetSlot, setActiveGadgetSlot] = useState<0 | 1>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [inspectedId, setInspectedId] = useState<string>(loadout.operatorId);
+
+  const normalizedDaily = useMemo(
+    () => ensureTodayDailyMissions(dailyMissions),
+    [dailyMissions]
+  );
+  const claimableDailyCount = useMemo(
+    () => countClaimableDailyMissions(normalizedDaily),
+    [normalizedDaily]
+  );
+  const resetWindow = getTimeUntilDailyReset();
 
   const itemsForTab: StoreItem[] =
     activeTab === 'operators'
@@ -167,12 +193,13 @@ export default function ArmoryModal({
     }
   };
 
-  const handleSwitchTab = (tab: StoreCategory) => {
+  const handleSwitchTab = (tab: StoreCategory | 'daily') => {
     playUiClick();
     setActiveTab(tab);
     if (tab === 'operators') setInspectedId(loadout.operatorId);
     else if (tab === 'weapons') setInspectedId(loadout.weaponId);
-    else setInspectedId(loadout.gadgetIds[activeGadgetSlot] || GADGET_ITEMS[0].id);
+    else if (tab === 'gadgets')
+      setInspectedId(loadout.gadgetIds[activeGadgetSlot] || GADGET_ITEMS[0].id);
   };
 
   const inspRarity = RARITY_STYLES[inspectedItem.rarity];
@@ -486,6 +513,28 @@ export default function ArmoryModal({
             >
               Gadgets & Thrusters ({GADGET_ITEMS.length})
             </button>
+            <button
+              onClick={() => handleSwitchTab('daily')}
+              className={`tac-bevel-btn px-3.5 py-1.5 rounded-lg text-xs font-display font-bold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
+                activeTab === 'daily'
+                  ? 'bg-emerald-500 text-zinc-950'
+                  : 'text-zinc-300 hover:text-white'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span>Daily</span>
+              {claimableDailyCount > 0 && (
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                    activeTab === 'daily'
+                      ? 'bg-zinc-950 text-emerald-300'
+                      : 'bg-amber-500 text-zinc-950'
+                  }`}
+                >
+                  {claimableDailyCount}
+                </span>
+              )}
+            </button>
           </div>
 
           {activeTab === 'gadgets' && (
@@ -521,7 +570,182 @@ export default function ArmoryModal({
           )}
         </div>
 
-        {/* Main 2-Column Store Body: Left 3D Cards Grid + Right 360° 3D Inspector & Stat Comparison */}
+        {/* Main 2-Column Store Body (or Daily Missions Tracker when Daily tab active) */}
+        {activeTab === 'daily' ? (
+          <div className="relative z-10 flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4 px-5 pb-5 pt-1 overflow-y-auto">
+            {/* Left Daily Missions List */}
+            <div className="lg:col-span-7 flex flex-col gap-3 content-start">
+              {DAILY_MISSIONS.map((mission) => {
+                const rawProg = normalizedDaily.progress[mission.id] || 0;
+                const progress = Math.min(mission.target, rawProg);
+                const pct = Math.min(100, Math.round((progress / mission.target) * 100));
+                const isComplete = progress >= mission.target;
+                const isClaimed = normalizedDaily.claimedIds.includes(mission.id);
+                const tierColor =
+                  mission.tier === 'Apex'
+                    ? 'bg-purple-500/20 border-purple-400/55 text-purple-200'
+                    : mission.tier === 'Assault'
+                    ? 'bg-rose-500/20 border-rose-400/55 text-rose-200'
+                    : 'bg-cyan-500/15 border-cyan-500/45 text-cyan-300';
+
+                return (
+                  <article
+                    key={mission.id}
+                    className={`tac-panel rounded-xl border p-4 flex flex-col gap-3 transition-all ${
+                      isComplete && !isClaimed
+                        ? 'border-emerald-400/75 shadow-[0_0_24px_-8px_rgba(16,185,129,0.45)]'
+                        : isClaimed
+                        ? 'border-zinc-800/90 opacity-75'
+                        : 'border-zinc-700/80'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 rounded border text-[10px] font-mono font-bold uppercase ${tierColor}`}
+                          >
+                            {mission.tier}
+                          </span>
+                          <h3 className="font-display text-sm font-bold text-white tracking-wide">
+                            {mission.title}
+                          </h3>
+                        </div>
+                        <p className="text-xs text-zinc-400 mt-1">{mission.description}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2 font-mono tabular-nums text-xs shrink-0">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-bold">
+                          <Coins className="w-3.5 h-3.5" />
+                          +{mission.rewardCoins}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 font-bold">
+                          <Gem className="w-3.5 h-3.5" />
+                          +{mission.rewardCredits}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-zinc-300">
+                          <span>Progress</span>
+                          <span className={isComplete ? 'text-emerald-400 font-bold' : 'text-zinc-200'}>
+                            {progress} / {mission.target}
+                            {mission.unitLabel || ''}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              isClaimed
+                                ? 'bg-zinc-600'
+                                : isComplete
+                                ? 'bg-emerald-400'
+                                : 'bg-cyan-400'
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {isClaimed ? (
+                        <span className="px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-400 font-display text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Claimed</span>
+                        </span>
+                      ) : isComplete ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playPowerUp();
+                            onClaimDailyMission(mission.id);
+                          }}
+                          className="tac-bevel-btn px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-display text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                        >
+                          <Gift className="w-3.5 h-3.5" />
+                          <span>Claim</span>
+                        </button>
+                      ) : (
+                        <span className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-500 font-mono text-[11px] shrink-0">
+                          {pct}%
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* Right Daily Briefing & Claim All Summary */}
+            <aside className="lg:col-span-5 tac-panel border border-zinc-700/80 rounded-xl p-4 flex flex-col gap-4 h-fit sticky top-0">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-400">
+                    Daily Operations
+                  </div>
+                  <h3 className="font-display text-lg font-bold text-white uppercase tracking-wide mt-0.5">
+                    Bounty Directive
+                  </h3>
+                </div>
+                <div className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-800 text-[11px] font-mono text-zinc-300 inline-flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>
+                    Resets {resetWindow.hours}h {String(resetWindow.minutes).padStart(2, '0')}m
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950/90 border border-zinc-800 rounded-xl p-3.5 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-zinc-400">Objectives Completed</span>
+                  <span className="text-white font-bold">
+                    {
+                      DAILY_MISSIONS.filter(
+                        (m) => (normalizedDaily.progress[m.id] || 0) >= m.target
+                      ).length
+                    }{' '}
+                    / {DAILY_MISSIONS.length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-zinc-400">Claimed Today</span>
+                  <span className="text-emerald-400 font-bold">
+                    {normalizedDaily.claimedIds.length} / {DAILY_MISSIONS.length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs font-mono pt-2 border-t border-zinc-800/80">
+                  <span className="text-zinc-400">Total Daily Pool</span>
+                  <span className="text-amber-300 font-bold">
+                    +{DAILY_MISSIONS.reduce((sum, m) => sum + m.rewardCoins, 0)} Coins · +
+                    {DAILY_MISSIONS.reduce((sum, m) => sum + m.rewardCredits, 0)} Cr
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={claimableDailyCount === 0}
+                onClick={() => {
+                  playPowerUp();
+                  onClaimAllDailyMissions();
+                }}
+                className="tac-bevel-btn w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-950 disabled:text-zinc-600 disabled:border disabled:border-zinc-800 text-zinc-950 font-display text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-colors"
+              >
+                <Gift className="w-4 h-4" />
+                <span>
+                  {claimableDailyCount > 0
+                    ? `Claim All Ready (${claimableDailyCount})`
+                    : 'No Unclaimed Rewards Ready'}
+                </span>
+              </button>
+
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Progress updates live during Solo Odyssey deployments and Global PvP combat. When connected to your Cloud Storage Database, daily mission progress syncs automatically across devices.
+              </p>
+            </aside>
+          </div>
+        ) : (
         <div className="relative z-10 flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4 px-5 pb-5 pt-1 overflow-y-auto">
           {/* Left Grid of Live 3D Pedestal Cards */}
           <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3.5 content-start">
@@ -794,6 +1018,7 @@ export default function ArmoryModal({
             </div>
           </aside>
         </div>
+        )}
       </div>
     </div>
   );

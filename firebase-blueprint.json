@@ -44,6 +44,10 @@
           "type": "object",
           "description": "Equipped operator, weapon, gadgets, and support drone settings."
         },
+        "dailyMissions": {
+          "type": "object",
+          "description": "Daily mission progress counters and claimed mission IDs keyed by local YYYY-MM-DD date."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -64,6 +68,7 @@
         "stats",
         "ownedItems",
         "loadout",
+        "dailyMissions",
         "createdAt",
         "updatedAt"
       ]

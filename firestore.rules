@@ -56,12 +56,32 @@ service cloud.firestore {
         && l.droneModelId is string && l.droneModelId.size() > 0 && l.droneModelId.size() <= 40;
     }
 
+    function isValidDailyMissions(dm) {
+      return dm is map
+        && dm.keys().hasAll(['dateKey', 'progress', 'claimedIds'])
+        && dm.keys().hasOnly(['dateKey', 'progress', 'claimedIds'])
+        && dm.dateKey is string
+        && dm.dateKey.size() == 10
+        && dm.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && dm.progress is map
+        && dm.progress.keys().hasAll(['daily_run_500m', 'daily_kills_50', 'daily_gold_150', 'daily_runs_2', 'daily_boss_1'])
+        && dm.progress.keys().hasOnly(['daily_run_500m', 'daily_kills_50', 'daily_gold_150', 'daily_runs_2', 'daily_boss_1'])
+        && dm.progress.daily_run_500m is number && dm.progress.daily_run_500m >= 0 && dm.progress.daily_run_500m <= 100000
+        && dm.progress.daily_kills_50 is number && dm.progress.daily_kills_50 >= 0 && dm.progress.daily_kills_50 <= 10000
+        && dm.progress.daily_gold_150 is number && dm.progress.daily_gold_150 >= 0 && dm.progress.daily_gold_150 <= 100000
+        && dm.progress.daily_runs_2 is number && dm.progress.daily_runs_2 >= 0 && dm.progress.daily_runs_2 <= 1000
+        && dm.progress.daily_boss_1 is number && dm.progress.daily_boss_1 >= 0 && dm.progress.daily_boss_1 <= 1000
+        && dm.claimedIds is list
+        && dm.claimedIds.size() <= 5
+        && dm.claimedIds.hasOnly(['daily_run_500m', 'daily_kills_50', 'daily_gold_150', 'daily_runs_2', 'daily_boss_1']);
+    }
+
     function isValidOperativeProfile(data, uid) {
       return data.keys().hasAll([
-          'uid', 'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'createdAt', 'updatedAt'
+          'uid', 'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'dailyMissions', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'uid', 'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'createdAt', 'updatedAt'
+          'uid', 'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'dailyMissions', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.uid)
         && data.uid == request.auth.uid
@@ -82,6 +102,7 @@ service cloud.firestore {
         && data.ownedItems[0] is string
         && data.ownedItems[0].size() <= 64
         && isValidLoadout(data.loadout)
+        && isValidDailyMissions(data.dailyMissions)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -101,7 +122,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly([
-          'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'updatedAt'
+          'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'dailyMissions', 'updatedAt'
         ]);
       allow delete: if isValidId(uid) && isOwner(uid);
     }

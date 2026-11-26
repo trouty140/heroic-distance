@@ -5,6 +5,7 @@ import type {
   UserAccount,
 } from '../types';
 import { DEFAULT_LOADOUT, DEFAULT_OWNED_ITEMS } from '../config/armory';
+import { createEmptyDailyMissionsState } from '../config/dailyMissions';
 
 const ACCOUNTS_KEY = 'heroic_distance_accounts_v1';
 const SESSION_KEY = 'heroic_distance_session_v1';
@@ -144,6 +145,7 @@ export function registerAccount(opts: {
       droneEnabled: true,
       droneModelId: 'drone_sentinel',
     },
+    dailyMissions: createEmptyDailyMissionsState(),
   };
 
   map[key] = account;
@@ -295,5 +297,6 @@ export function createGuestAccount(tag?: string): UserAccount {
       droneEnabled: true,
       droneModelId: 'drone_sentinel',
     },
+    dailyMissions: createEmptyDailyMissionsState(),
   };
 }

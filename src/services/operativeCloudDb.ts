@@ -7,13 +7,23 @@ import {
   updateDoc,
   type Timestamp,
 } from 'firebase/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { auth, db, googleProvider } from '../firebase';
 import { DEFAULT_LOADOUT, DEFAULT_OWNED_ITEMS } from '../config/armory';
+import {
+  DAILY_MISSIONS,
+  createEmptyDailyMissionsState,
+  ensureTodayDailyMissions,
+} from '../config/dailyMissions';
 import type {
+  DailyMissionsState,
   GadgetId,
   TacticalAvatarId,
   UserAccount,
 } from '../types';
+
+export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
+export const FIREBASE_AUTH_DOMAINS_URL = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
 
 export enum OperationType {
   CREATE = 'create',
@@ -73,15 +83,26 @@ export function handleFirestoreError(
 
 export function formatCloudErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) return fallback;
+  const raw = err.message || '';
+  if (raw.includes('auth/unauthorized-domain')) {
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+    return `Domain "${host}" is not authorized for Firebase Google Sign-In. Add "${host}" in Firebase Console → Authentication → Settings → Authorized domains, or sign in from the AI Studio preview URL.`;
+  }
+  if (raw.includes('auth/popup-blocked')) {
+    return 'Sign-in popup was blocked by your browser. Allow popups for this site and try again.';
+  }
+  if (raw.includes('auth/popup-closed-by-user') || raw.includes('auth/cancelled-popup-request')) {
+    return 'Google sign-in popup was closed before completion.';
+  }
   try {
-    const parsed = JSON.parse(err.message);
+    const parsed = JSON.parse(raw);
     if (parsed && typeof parsed.error === 'string') {
       return parsed.error;
     }
   } catch {
     // not JSON
   }
-  return err.message || fallback;
+  return raw || fallback;
 }
 
 const VALID_AVATARS: TacticalAvatarId[] = [
@@ -99,6 +120,32 @@ function clampNumber(val: unknown, min: number, max: number, fallback = 0): numb
 function sanitizeUsername(raw: string): string {
   const cleaned = raw.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 18);
   return cleaned.length >= 3 ? cleaned : 'Operative';
+}
+
+function sanitizeDailyMissionsForCloud(raw?: DailyMissionsState | null): {
+  dateKey: string;
+  progress: {
+    daily_run_500m: number;
+    daily_kills_50: number;
+    daily_gold_150: number;
+    daily_runs_2: number;
+    daily_boss_1: number;
+  };
+  claimedIds: string[];
+} {
+  const normalized = ensureTodayDailyMissions(raw);
+  const allowedIds = new Set(DAILY_MISSIONS.map((m) => m.id));
+  return {
+    dateKey: normalized.dateKey,
+    progress: {
+      daily_run_500m: clampNumber(normalized.progress.daily_run_500m, 0, 100000, 0),
+      daily_kills_50: clampNumber(normalized.progress.daily_kills_50, 0, 10000, 0),
+      daily_gold_150: clampNumber(normalized.progress.daily_gold_150, 0, 100000, 0),
+      daily_runs_2: clampNumber(normalized.progress.daily_runs_2, 0, 1000, 0),
+      daily_boss_1: clampNumber(normalized.progress.daily_boss_1, 0, 1000, 0),
+    },
+    claimedIds: normalized.claimedIds.filter((id) => allowedIds.has(id)).slice(0, 5),
+  };
 }
 
 export interface CloudOperativePayload {
@@ -125,6 +172,17 @@ export interface CloudOperativePayload {
     gadgetIds: string[];
     droneEnabled: boolean;
     droneModelId: string;
+  };
+  dailyMissions: {
+    dateKey: string;
+    progress: {
+      daily_run_500m: number;
+      daily_kills_50: number;
+      daily_gold_150: number;
+      daily_runs_2: number;
+      daily_boss_1: number;
+    };
+    claimedIds: string[];
   };
 }
 
@@ -176,6 +234,7 @@ export function sanitizeOperativeForCloud(
       droneEnabled: Boolean(account.loadout?.droneEnabled ?? true),
       droneModelId: String(account.loadout?.droneModelId || 'drone_sentinel').slice(0, 40),
     },
+    dailyMissions: sanitizeDailyMissionsForCloud(account.dailyMissions),
   };
 }
 
@@ -199,6 +258,8 @@ export function cloudDocToUserAccount(data: Record<string, unknown>): UserAccoun
   const avatarId: TacticalAvatarId = VALID_AVATARS.includes(avatarCandidate)
     ? avatarCandidate
     : 'avatar_specter';
+
+  const rawDaily = data.dailyMissions as DailyMissionsState | undefined;
 
   return {
     username: typeof data.username === 'string' ? data.username : 'Operative',
@@ -243,6 +304,9 @@ export function cloudDocToUserAccount(data: Record<string, unknown>): UserAccoun
           ? (loadoutRaw.droneModelId as UserAccount['loadout']['droneModelId'])
           : 'drone_sentinel',
     },
+    dailyMissions: rawDaily
+      ? ensureTodayDailyMissions(rawDaily)
+      : createEmptyDailyMissionsState(),
   };
 }
 
@@ -291,6 +355,7 @@ export async function upsertCloudOperative(
         stats: sanitized.stats,
         ownedItems: sanitized.ownedItems,
         loadout: sanitized.loadout,
+        dailyMissions: sanitized.dailyMissions,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
