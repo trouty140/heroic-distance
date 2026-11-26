@@ -44,11 +44,22 @@ import PrivateLinkModal from './components/PrivateLinkModal';
 import { DEFAULT_GAME_SETTINGS } from './config/worlds';
 import { DEFAULT_LOADOUT, DEFAULT_OWNED_ITEMS } from './config/armory';
 import {
+  activateCloudAccount,
   createGuestAccount,
   getActiveAccount,
   signOutAccount,
   updateActiveAccount,
 } from './utils/authStorage';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { auth } from './firebase';
+import {
+  connectCloudStorageDb,
+  disconnectCloudStorageDb,
+  fetchCloudOperative,
+  formatCloudErrorMessage,
+  upsertCloudOperative,
+} from './services/operativeCloudDb';
+import type { CloudSyncStatus } from './components/PlayerProfileCard';
 import { Skull, Coins, RefreshCw, Trophy, Settings, Briefcase, Clock } from 'lucide-react';
 import * as Sound from './utils/audio';
 
@@ -74,6 +85,12 @@ export default function App() {
   const [guestPassExpiresAt, setGuestPassExpiresAt] = useState<number | null>(null);
   const [guestPassExpired, setGuestPassExpired] = useState(false);
   const [guestRemainingSec, setGuestRemainingSec] = useState(0);
+  const [cloudUser, setCloudUser] = useState<FirebaseUser | null>(null);
+  const [cloudProfile, setCloudProfile] = useState<UserAccount | null>(null);
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [cloudSyncState, setCloudSyncState] = useState<CloudSyncStatus>('disconnected');
+  const cloudSyncTimerRef = useRef<number | null>(null);
   const abilityTriggerRef = useRef<((kind: ControlActionKind) => void) | null>(null);
   const virtualControlRef = useRef<VirtualControlInput>({
     left: false,
@@ -312,6 +329,35 @@ export default function App() {
     return () => clearInterval(timer);
   }, [guestPassExpiresAt]);
 
+  // Listen to Firebase Auth state for Cloud Storage Database
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCloudUser(user);
+      setCloudError(null);
+      if (!user) {
+        setCloudProfile(null);
+        setCloudSyncState('disconnected');
+        return;
+      }
+      if (!user.emailVerified) {
+        setCloudError('Google account email verification is required for Cloud Storage Database.');
+        setCloudSyncState('error');
+        return;
+      }
+      try {
+        const fetched = await fetchCloudOperative(user.uid);
+        setCloudProfile(fetched);
+        setCloudSyncState('synced');
+      } catch (err) {
+        setCloudSyncState('error');
+        setCloudError(
+          formatCloudErrorMessage(err, 'Unable to read Cloud Storage Database.')
+        );
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Persist account wallet, ownedItems, loadout, and stats inside localStorage account record
   useEffect(() => {
     if (!account) return;
@@ -326,6 +372,38 @@ export default function App() {
       setAccount(updated);
     }
   }, [wallet, ownedItems, loadout, stats]);
+
+  // Debounced sync to Cloud Storage Database when connected (skipped for temporary guest passes)
+  useEffect(() => {
+    if (!account || !cloudUser || !cloudUser.emailVerified || guestPassExpiresAt) return;
+    if (cloudSyncTimerRef.current) {
+      window.clearTimeout(cloudSyncTimerRef.current);
+    }
+    const snapshotAccount: UserAccount = {
+      ...account,
+      wallet,
+      ownedItems,
+      loadout,
+      stats,
+    };
+    cloudSyncTimerRef.current = window.setTimeout(async () => {
+      setCloudSyncState('syncing');
+      try {
+        await upsertCloudOperative(cloudUser.uid, snapshotAccount);
+        setCloudProfile(snapshotAccount);
+        setCloudSyncState('synced');
+      } catch (err) {
+        setCloudSyncState('error');
+        setCloudError(formatCloudErrorMessage(err, 'Cloud sync failed.'));
+      }
+    }, 650);
+
+    return () => {
+      if (cloudSyncTimerRef.current) {
+        window.clearTimeout(cloudSyncTimerRef.current);
+      }
+    };
+  }, [account?.username, account?.bio, account?.avatarId, wallet, ownedItems, loadout, stats, cloudUser, guestPassExpiresAt]);
 
   // Poll live PvP room counts while on MENU
   useEffect(() => {
@@ -371,6 +449,76 @@ export default function App() {
   const handleUpdateBio = (nextBio: string) => {
     const updated = updateActiveAccount((prev) => ({ ...prev, bio: nextBio }));
     if (updated) setAccount(updated);
+  };
+
+  const handleConnectCloudDb = async () => {
+    setCloudBusy(true);
+    setCloudError(null);
+    try {
+      const cred = await connectCloudStorageDb();
+      if (cred.user && cred.user.emailVerified) {
+        const fetched = await fetchCloudOperative(cred.user.uid);
+        setCloudProfile(fetched);
+        if (account && !guestPassExpiresAt) {
+          const snapshot: UserAccount = { ...account, wallet, ownedItems, loadout, stats };
+          await upsertCloudOperative(cred.user.uid, snapshot);
+          setCloudProfile(snapshot);
+        }
+        setCloudSyncState('synced');
+      }
+    } catch (err) {
+      setCloudSyncState('error');
+      setCloudError(
+        formatCloudErrorMessage(err, 'Failed to connect Cloud Storage Database.')
+      );
+    } finally {
+      setCloudBusy(false);
+    }
+  };
+
+  const handleDisconnectCloudDb = async () => {
+    setCloudBusy(true);
+    setCloudError(null);
+    try {
+      await disconnectCloudStorageDb();
+      setCloudProfile(null);
+      setCloudSyncState('disconnected');
+    } catch (err) {
+      setCloudError(
+        formatCloudErrorMessage(err, 'Failed to disconnect Storage Database.')
+      );
+    } finally {
+      setCloudBusy(false);
+    }
+  };
+
+  const handleSyncCloudNow = async () => {
+    if (!cloudUser || !account || guestPassExpiresAt) return;
+    setCloudSyncState('syncing');
+    setCloudError(null);
+    try {
+      const snapshot: UserAccount = { ...account, wallet, ownedItems, loadout, stats };
+      await upsertCloudOperative(cloudUser.uid, snapshot);
+      setCloudProfile(snapshot);
+      setCloudSyncState('synced');
+    } catch (err) {
+      setCloudSyncState('error');
+      setCloudError(formatCloudErrorMessage(err, 'Cloud sync failed.'));
+    }
+  };
+
+  const handleSyncAccountToCloud = async (targetAccount: UserAccount) => {
+    if (!cloudUser) return;
+    setCloudSyncState('syncing');
+    await upsertCloudOperative(cloudUser.uid, targetAccount);
+    setCloudProfile(targetAccount);
+    setCloudSyncState('synced');
+  };
+
+  const handleDeployCloudProfile = () => {
+    if (!cloudProfile) return;
+    const activated = activateCloudAccount(cloudProfile);
+    handleAuthenticated(activated);
   };
 
   const handleSignOut = () => {
@@ -743,7 +891,17 @@ export default function App() {
             </div>
           </div>
         ) : !account ? (
-          <AuthScreen onAuthenticated={handleAuthenticated} />
+          <AuthScreen
+            onAuthenticated={handleAuthenticated}
+            cloudUser={cloudUser}
+            cloudProfile={cloudProfile}
+            cloudBusy={cloudBusy}
+            cloudError={cloudError}
+            onConnectCloudDb={handleConnectCloudDb}
+            onDisconnectCloudDb={handleDisconnectCloudDb}
+            onDeployCloudProfile={handleDeployCloudProfile}
+            onSyncAccountToCloud={handleSyncAccountToCloud}
+          />
         ) : (
           <>
             {guestPassExpiresAt && (
@@ -760,6 +918,13 @@ export default function App() {
                 account={account}
                 onUpdateBio={handleUpdateBio}
                 onSignOut={handleSignOut}
+                cloudUser={cloudUser}
+                cloudSyncState={cloudSyncState}
+                cloudBusy={cloudBusy}
+                isGuestPass={Boolean(guestPassExpiresAt)}
+                onConnectCloudDb={handleConnectCloudDb}
+                onDisconnectCloudDb={handleDisconnectCloudDb}
+                onSyncCloudNow={handleSyncCloudNow}
                 stats={stats}
                 settings={settings}
                 wallet={wallet}

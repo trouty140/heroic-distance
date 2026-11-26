@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidWallet(w) {
+      return w is map
+        && w.keys().hasAll(['coins', 'credits'])
+        && w.keys().hasOnly(['coins', 'credits'])
+        && w.coins is number && w.coins >= 0 && w.coins <= 10000000
+        && w.credits is number && w.credits >= 0 && w.credits <= 10000000;
+    }
+
+    function isValidStats(s) {
+      return s is map
+        && s.keys().hasAll(['distanceRun', 'enemiesDefeated', 'damageDealt', 'goldCollected', 'runs', 'highestDistance'])
+        && s.keys().hasOnly(['distanceRun', 'enemiesDefeated', 'damageDealt', 'goldCollected', 'runs', 'highestDistance'])
+        && s.distanceRun is number && s.distanceRun >= 0 && s.distanceRun <= 100000000
+        && s.enemiesDefeated is number && s.enemiesDefeated >= 0 && s.enemiesDefeated <= 10000000
+        && s.damageDealt is number && s.damageDealt >= 0 && s.damageDealt <= 1000000000
+        && s.goldCollected is number && s.goldCollected >= 0 && s.goldCollected <= 100000000
+        && s.runs is number && s.runs >= 0 && s.runs <= 1000000
+        && s.highestDistance is number && s.highestDistance >= 0 && s.highestDistance <= 100000;
+    }
+
+    function isValidLoadout(l) {
+      return l is map
+        && l.keys().hasAll(['operatorId', 'weaponId', 'gadgetIds', 'droneEnabled', 'droneModelId'])
+        && l.keys().hasOnly(['operatorId', 'weaponId', 'gadgetIds', 'droneEnabled', 'droneModelId'])
+        && l.operatorId is string && l.operatorId.size() > 0 && l.operatorId.size() <= 40
+        && l.weaponId is string && l.weaponId.size() > 0 && l.weaponId.size() <= 40
+        && l.gadgetIds is list && l.gadgetIds.size() <= 2
+        && l.droneEnabled is bool
+        && l.droneModelId is string && l.droneModelId.size() > 0 && l.droneModelId.size() <= 40;
+    }
+
+    function isValidOperativeProfile(data, uid) {
+      return data.keys().hasAll([
+          'uid', 'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == uid
+        && data.username is string
+        && data.username.size() >= 3
+        && data.username.size() <= 18
+        && data.username.matches('^[a-zA-Z0-9_-]+$')
+        && data.avatarId is string
+        && data.avatarId in ['avatar_specter', 'avatar_wraith', 'avatar_aegis', 'avatar_valkyrie']
+        && data.bio is string
+        && data.bio.size() <= 140
+        && isValidWallet(data.wallet)
+        && isValidStats(data.stats)
+        && data.ownedItems is list
+        && data.ownedItems.size() >= 1
+        && data.ownedItems.size() <= 40
+        && data.ownedItems[0] is string
+        && data.ownedItems[0].size() <= 64
+        && isValidLoadout(data.loadout)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /operatives/{uid} {
+      allow get: if isValidId(uid) && isOwner(uid);
+      allow list: if false;
+      allow create: if isValidId(uid)
+        && isOwner(uid)
+        && isValidOperativeProfile(incoming(), uid)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(uid)
+        && isOwner(uid)
+        && isValidOperativeProfile(incoming(), uid)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'username', 'avatarId', 'bio', 'wallet', 'stats', 'ownedItems', 'loadout', 'updatedAt'
+        ]);
+      allow delete: if isValidId(uid) && isOwner(uid);
+    }
+  }
+}

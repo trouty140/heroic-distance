@@ -30,13 +30,21 @@ import {
   getWeaponById,
 } from '../config/armory';
 import { PedestalCardCanvas3D } from '../three/StorePedestal3D';
-import PlayerProfileCard from './PlayerProfileCard';
+import type { User as FirebaseUser } from 'firebase/auth';
+import PlayerProfileCard, { type CloudSyncStatus } from './PlayerProfileCard';
 import { playUiClick } from '../utils/audio';
 
 interface IntroScreenProps {
   account: UserAccount;
   onUpdateBio: (nextBio: string) => void;
   onSignOut: () => void;
+  cloudUser: FirebaseUser | null;
+  cloudSyncState: CloudSyncStatus;
+  cloudBusy: boolean;
+  isGuestPass?: boolean;
+  onConnectCloudDb: () => Promise<void>;
+  onDisconnectCloudDb: () => Promise<void>;
+  onSyncCloudNow: () => Promise<void>;
   onStartGame: (characterClass: 'vanguard' | 'shadowblade' | 'spellweaver') => void;
   onStartPvp: (
     characterClass: 'vanguard' | 'shadowblade' | 'spellweaver',
@@ -58,6 +66,13 @@ export default function IntroScreen({
   account,
   onUpdateBio,
   onSignOut,
+  cloudUser,
+  cloudSyncState,
+  cloudBusy,
+  isGuestPass,
+  onConnectCloudDb,
+  onDisconnectCloudDb,
+  onSyncCloudNow,
   onStartGame,
   onStartPvp,
   stats,
@@ -284,6 +299,13 @@ export default function IntroScreen({
               loadout={loadout}
               onUpdateBio={onUpdateBio}
               onSignOut={onSignOut}
+              cloudUser={cloudUser}
+              cloudSyncState={cloudSyncState}
+              cloudBusy={cloudBusy}
+              isGuestPass={isGuestPass}
+              onConnectCloudDb={onConnectCloudDb}
+              onDisconnectCloudDb={onDisconnectCloudDb}
+              onSyncCloudNow={onSyncCloudNow}
             />
           </div>
         </section>

@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "OperativeProfile": {
+      "title": "OperativeProfile",
+      "description": "Cloud-persisted tactical operative profile, wallet, stats, owned armory items, and loadout.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID owning this operative record.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "description": "Operative tactical callsign.",
+          "minLength": 3,
+          "maxLength": 18,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "avatarId": {
+          "type": "string",
+          "description": "Selected tactical emblem ID.",
+          "enum": ["avatar_specter", "avatar_wraith", "avatar_aegis", "avatar_valkyrie"]
+        },
+        "bio": {
+          "type": "string",
+          "description": "Customizable operative callsign bio.",
+          "maxLength": 140
+        },
+        "wallet": {
+          "type": "object",
+          "description": "Player coin and credit balances."
+        },
+        "stats": {
+          "type": "object",
+          "description": "Cumulative distance, kills, damage, gold, runs, and best distance."
+        },
+        "ownedItems": {
+          "type": "array",
+          "description": "Unlocked operator, weapon, and gadget IDs."
+        },
+        "loadout": {
+          "type": "object",
+          "description": "Equipped operator, weapon, gadgets, and support drone settings."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-update timestamp."
+        }
+      },
+      "required": [
+        "uid",
+        "username",
+        "avatarId",
+        "bio",
+        "wallet",
+        "stats",
+        "ownedItems",
+        "loadout",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/operatives/{uid}": {
+      "schema": { "$ref": "#/entities/OperativeProfile" },
+      "description": "Owner-isolated cloud operative storage document keyed by Firebase Auth UID."
+    }
+  }
+}

@@ -1,16 +1,38 @@
 import React, { useState } from 'react';
-import { Award, Edit3, Check, X, LogOut, Crosshair, Trophy } from 'lucide-react';
+import type { User as FirebaseUser } from 'firebase/auth';
+import {
+  Award,
+  Edit3,
+  Check,
+  X,
+  LogOut,
+  Crosshair,
+  Trophy,
+  Database,
+  CloudUpload,
+  RefreshCw,
+  Loader2,
+} from 'lucide-react';
 import type { PlayerLoadout, UserAccount } from '../types';
 import { getOperatorById, getWeaponById } from '../config/armory';
 import { getRankFromStats } from '../utils/authStorage';
 import { TacticalAvatarCrest } from './AuthScreen';
 import { playUiClick } from '../utils/audio';
 
+export type CloudSyncStatus = 'disconnected' | 'syncing' | 'synced' | 'error';
+
 interface PlayerProfileCardProps {
   account: UserAccount;
   loadout: PlayerLoadout;
   onUpdateBio: (nextBio: string) => void;
   onSignOut: () => void;
+  cloudUser: FirebaseUser | null;
+  cloudSyncState: CloudSyncStatus;
+  cloudBusy: boolean;
+  isGuestPass?: boolean;
+  onConnectCloudDb: () => Promise<void>;
+  onDisconnectCloudDb: () => Promise<void>;
+  onSyncCloudNow: () => Promise<void>;
 }
 
 export default function PlayerProfileCard({
@@ -18,6 +40,13 @@ export default function PlayerProfileCard({
   loadout,
   onUpdateBio,
   onSignOut,
+  cloudUser,
+  cloudSyncState,
+  cloudBusy,
+  isGuestPass = false,
+  onConnectCloudDb,
+  onDisconnectCloudDb,
+  onSyncCloudNow,
 }: PlayerProfileCardProps) {
   const [editingBio, setEditingBio] = useState(false);
   const [bioDraft, setBioDraft] = useState(account.bio);
@@ -150,6 +179,84 @@ export default function PlayerProfileCard({
           {operator.name.split('"')[1] || operator.name} · {weapon.name.split(' ')[0]}
         </span>
       </div>
+
+      {/* Cloud Storage Database Bar */}
+      {!isGuestPass && (
+        <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
+          {!cloudUser ? (
+            <>
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-zinc-400">
+                <Database className="w-3 h-3 text-zinc-500" />
+                <span>Local Save Only</span>
+              </span>
+              <button
+                type="button"
+                disabled={cloudBusy}
+                onClick={() => {
+                  playUiClick();
+                  void onConnectCloudDb();
+                }}
+                className="tac-bevel-btn px-2 py-1 rounded bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/45 text-[10px] font-display font-bold uppercase tracking-wider text-cyan-300 inline-flex items-center gap-1 cursor-pointer disabled:opacity-60"
+              >
+                {cloudBusy ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <CloudUpload className="w-3 h-3" />
+                )}
+                <span>Add Storage DB</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5 min-w-0 text-[10px] font-mono">
+                <Database
+                  className={`w-3 h-3 shrink-0 ${
+                    cloudSyncState === 'error'
+                      ? 'text-rose-400'
+                      : cloudSyncState === 'syncing'
+                      ? 'text-amber-400'
+                      : 'text-emerald-400'
+                  }`}
+                />
+                <span className="truncate text-zinc-300">
+                  {cloudSyncState === 'syncing'
+                    ? 'Syncing Cloud DB...'
+                    : cloudSyncState === 'error'
+                    ? 'Sync Failed'
+                    : `Cloud DB · ${cloudUser.email || 'Synced'}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  disabled={cloudBusy || cloudSyncState === 'syncing'}
+                  onClick={() => {
+                    playUiClick();
+                    void onSyncCloudNow();
+                  }}
+                  title="Sync Operative Now"
+                  className="tac-bevel-btn p-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-cyan-300 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={`w-3 h-3 ${cloudSyncState === 'syncing' ? 'animate-spin' : ''}`}
+                  />
+                </button>
+                <button
+                  type="button"
+                  disabled={cloudBusy}
+                  onClick={() => {
+                    playUiClick();
+                    void onDisconnectCloudDb();
+                  }}
+                  className="text-[10px] font-mono text-zinc-500 hover:text-rose-300 cursor-pointer"
+                >
+                  Unlink
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

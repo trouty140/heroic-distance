@@ -102,6 +102,7 @@ export function registerAccount(opts: {
   username: string;
   password: string;
   avatarId: TacticalAvatarId;
+  autoLogin?: boolean;
 }): { ok: true; account: UserAccount } | { ok: false; error: string } {
   const cleanName = opts.username.trim();
   if (cleanName.length < 3 || cleanName.length > 18) {
@@ -140,15 +141,35 @@ export function registerAccount(opts: {
       operatorId: DEFAULT_LOADOUT.operatorId,
       weaponId: DEFAULT_LOADOUT.weaponId,
       gadgetIds: [...DEFAULT_LOADOUT.gadgetIds] as [typeof DEFAULT_LOADOUT.gadgetIds[0], typeof DEFAULT_LOADOUT.gadgetIds[1]],
+      droneEnabled: true,
+      droneModelId: 'drone_sentinel',
     },
   };
 
   map[key] = account;
   writeAccountsMap(map);
-  try {
-    localStorage.setItem(SESSION_KEY, cleanName);
-  } catch {}
+  if (opts.autoLogin !== false) {
+    try {
+      localStorage.setItem(SESSION_KEY, cleanName);
+    } catch {}
+  }
   return { ok: true, account };
+}
+
+export function activateCloudAccount(cloudAccount: UserAccount): UserAccount {
+  const map = readAccountsMap();
+  const key = cloudAccount.username.toLowerCase();
+  const existing = map[key];
+  const merged: UserAccount = {
+    ...cloudAccount,
+    passwordHash: existing?.passwordHash || cloudAccount.passwordHash || '',
+  };
+  map[key] = merged;
+  writeAccountsMap(map);
+  try {
+    localStorage.setItem(SESSION_KEY, merged.username);
+  } catch {}
+  return merged;
 }
 
 export function loginAccount(opts: {
