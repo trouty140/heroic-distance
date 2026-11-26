@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Chakra Petch", "Outfit", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* Next-Gen AAA Tactical UI Surfaces & Micro-Patterns */
+.tac-gunmetal {
+  background-color: #0b0e14;
+  background-image:
+    linear-gradient(160deg, rgba(38, 46, 61, 0.42) 0%, rgba(12, 15, 22, 0.94) 48%, rgba(7, 9, 13, 0.98) 100%),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.018) 0px,
+      rgba(255, 255, 255, 0.018) 2px,
+      transparent 2px,
+      transparent 6px
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
+    0 18px 42px -10px rgba(0, 0, 0, 0.78);
+}
+
+.tac-panel {
+  background-color: rgba(13, 17, 24, 0.88);
+  background-image:
+    linear-gradient(180deg, rgba(42, 50, 66, 0.25) 0%, rgba(10, 13, 19, 0.86) 100%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.014) 0px,
+      rgba(255, 255, 255, 0.014) 1px,
+      transparent 1px,
+      transparent 5px
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(148, 163, 184, 0.1),
+    0 10px 26px -8px rgba(0, 0, 0, 0.7);
+}
+
+.tac-glass {
+  background-color: rgba(11, 15, 22, 0.76);
+  background-image: linear-gradient(
+    145deg,
+    rgba(56, 189, 248, 0.06) 0%,
+    rgba(15, 23, 42, 0.72) 55%,
+    rgba(9, 11, 16, 0.88) 100%
+  );
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.65),
+    0 20px 50px -12px rgba(0, 0, 0, 0.85);
+}
+
+.tac-hud-pod {
+  background-color: rgba(9, 13, 20, 0.86);
+  background-image:
+    linear-gradient(165deg, rgba(34, 211, 238, 0.07) 0%, rgba(10, 14, 22, 0.92) 50%, rgba(6, 8, 13, 0.96) 100%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.016) 0px,
+      rgba(255, 255, 255, 0.016) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(186, 230, 253, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.8),
+    0 12px 30px -8px rgba(0, 0, 0, 0.8);
+}
+
+.tac-scanlines {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.028) 0px,
+    rgba(255, 255, 255, 0.028) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.tac-bevel-btn {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 6px 16px -4px rgba(0, 0, 0, 0.65);
+  transition: transform 110ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+
+.tac-bevel-btn:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.tac-bevel-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+.tac-chamfer {
+  clip-path: polygon(
+    10px 0%,
+    100% 0%,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0% 100%,
+    0% 10px
+  );
+}
+
+@keyframes tac-damage-flash {
+  0% {
+    opacity: 0.95;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.animate-tac-damage {
+  animation: tac-damage-flash 0.42s ease-out forwards;
+}

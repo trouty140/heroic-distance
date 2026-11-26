@@ -1,0 +1,6 @@
+{
+  "name": "Heroic Distance Roguelike",
+  "description": "An action-packed 2D roguelike where you battle enemies across procedurally generated landscapes to defeat the boss, rescue the princess, and complete the adventure.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
