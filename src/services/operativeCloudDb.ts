@@ -1,5 +1,7 @@
 import {
+  browserLocalPersistence,
   sendPasswordResetEmail,
+  setPersistence,
   signInWithPopup,
   signOut,
   type UserCredential,
@@ -332,6 +334,7 @@ export function cloudDocToUserAccount(data: Record<string, unknown>): UserAccoun
 }
 
 export async function connectCloudStorageDb(): Promise<UserCredential> {
+  await setPersistence(auth, browserLocalPersistence);
   return signInWithPopup(auth, googleProvider);
 }
 

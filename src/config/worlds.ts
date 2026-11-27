@@ -136,7 +136,7 @@ export const WEATHER_OPTIONS: {
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   world: 'scifi',
   weather: 'auto',
-  graphicsQuality: 'ultra',
+  graphicsQuality: 'high',
   volumetricLighting: true,
   rayTracedReflections: true,
   particlesEnabled: true,

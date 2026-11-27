@@ -28,6 +28,7 @@ import {
   listSavedAccounts,
   loginAccount,
   registerAccount,
+  signOutAccount,
 } from '../utils/authStorage';
 import { playPowerUp, playUiClick } from '../utils/audio';
 import {
@@ -41,6 +42,7 @@ interface AuthScreenProps {
   initialMode?: 'login' | 'signup';
   cloudUser: FirebaseUser | null;
   cloudProfile: UserAccount | null;
+  cloudProfileLoaded: boolean;
   cloudBusy: boolean;
   cloudError: string | null;
   onConnectCloudDb: () => Promise<void>;
@@ -105,6 +107,7 @@ export default function AuthScreen({
   initialMode,
   cloudUser,
   cloudProfile,
+  cloudProfileLoaded,
   cloudBusy,
   cloudError,
   onConnectCloudDb,
@@ -193,9 +196,26 @@ export default function AuthScreen({
       return;
     }
 
+    if (cloudUser && !cloudProfileLoaded) {
+      setError('Checking your cloud save. Please wait a moment, then try again.');
+      return;
+    }
+
     const res = loginAccount({ username, password });
     if (res.ok === false) {
       setError(res.error);
+      return;
+    }
+
+    if (cloudUser && cloudProfile) {
+      if (cloudProfile.username.toLowerCase() !== res.account.username.toLowerCase()) {
+        signOutAccount();
+        setError(
+          `This Google account has a cloud save for ${cloudProfile.username}. Restore that save or disconnect this Google account before using a different callsign.`
+        );
+        return;
+      }
+      onDeployCloudProfile();
       return;
     }
 
@@ -518,7 +538,7 @@ export default function AuthScreen({
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || Boolean(cloudUser && !cloudProfileLoaded)}
               className="tac-bevel-btn w-full py-3 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-zinc-950 font-display font-bold uppercase tracking-wider text-sm flex items-center justify-center gap-2 cursor-pointer transition-colors"
             >
               {submitting ? (
@@ -549,7 +569,7 @@ export default function AuthScreen({
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs font-display font-bold uppercase tracking-wider text-cyan-300">
                 <Database className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Storage Database (Cloud)</span>
+                <span>Cloud Save · Google Account</span>
               </div>
               {cloudUser ? (
                 <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-[10px] font-mono font-bold text-emerald-300 uppercase">
@@ -565,7 +585,7 @@ export default function AuthScreen({
             {!cloudUser ? (
               <>
                 <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  Add a Firebase Cloud Storage Database to save and restore your operative rank, wallet, and 3D Armory unlocks across devices.
+                  Link a Google account once to back up your operative, rank, wallet, and armory to the cloud. Use the same Google account on another device to restore it.
                 </p>
                 <button
                   type="button"
@@ -584,7 +604,7 @@ export default function AuthScreen({
                   ) : (
                     <>
                       <CloudUpload className="w-3.5 h-3.5" />
-                      <span>Add Storage Database</span>
+                      <span>Enable Cloud Save</span>
                     </>
                   )}
                 </button>
@@ -632,7 +652,7 @@ export default function AuthScreen({
                   </div>
                 ) : (
                   <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-                    Database attached. Confirm Operative Login above to store this profile in your Cloud Database.
+                    Cloud account linked. Sign in to back up a new operative, or restore the saved operative above. Your Google sign-in is remembered on this device.
                   </p>
                 )}
               </div>

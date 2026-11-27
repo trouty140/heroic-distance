@@ -241,7 +241,7 @@ export default function PlayerProfileCard({
             <>
               <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-zinc-400">
                 <Database className="w-3 h-3 text-zinc-500" />
-                <span>Local Save Only</span>
+                <span>Local Save · Not Backed Up</span>
               </span>
               <button
                 type="button"
@@ -257,7 +257,7 @@ export default function PlayerProfileCard({
                 ) : (
                   <CloudUpload className="w-3 h-3" />
                 )}
-                <span>Add Storage DB</span>
+                <span>Enable Cloud Save</span>
               </button>
             </>
           ) : (

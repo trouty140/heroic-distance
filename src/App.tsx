@@ -73,6 +73,7 @@ import * as Sound from './utils/audio';
 
 const SETTINGS_STORAGE_KEY = 'heroic_roguelike_settings';
 const SUPPLY_STORAGE_KEY = 'heroic_roguelike_supply_ts';
+const GRAPHICS_HIGH_MIGRATION_KEY = 'heroic_graphics_high_migration_v1';
 
 function normalizeQuality(raw: unknown): GraphicsQuality {
   if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'ultra') return raw;
@@ -98,6 +99,8 @@ export default function App() {
   const [guestRemainingSec, setGuestRemainingSec] = useState(0);
   const [cloudUser, setCloudUser] = useState<FirebaseUser | null>(null);
   const [cloudProfile, setCloudProfile] = useState<UserAccount | null>(null);
+  const [cloudProfileLoaded, setCloudProfileLoaded] = useState(false);
+  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [cloudSyncState, setCloudSyncState] = useState<CloudSyncStatus>('disconnected');
@@ -148,12 +151,19 @@ export default function App() {
   const [settings, setSettings] = useState<GameSettings>(() => {
     try {
       const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      const applyRequestedHighPreset =
+        localStorage.getItem(GRAPHICS_HIGH_MIGRATION_KEY) !== 'done';
+      if (applyRequestedHighPreset) {
+        localStorage.setItem(GRAPHICS_HIGH_MIGRATION_KEY, 'done');
+      }
       if (saved) {
         const parsed = JSON.parse(saved);
         return {
           ...DEFAULT_GAME_SETTINGS,
           ...parsed,
-          graphicsQuality: normalizeQuality(parsed.graphicsQuality),
+          graphicsQuality: applyRequestedHighPreset
+            ? 'high'
+            : normalizeQuality(parsed.graphicsQuality),
           masterVolume:
             typeof parsed.masterVolume === 'number'
               ? parsed.masterVolume
@@ -182,6 +192,7 @@ export default function App() {
               : DEFAULT_GAME_SETTINGS.controlScale,
         };
       }
+      localStorage.setItem(GRAPHICS_HIGH_MIGRATION_KEY, 'done');
     } catch {
       // ignore storage errors
     }
@@ -349,29 +360,50 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCloudUser(user);
       setCloudError(null);
+      setCloudProfileLoaded(false);
+      setCloudProfile(null);
       if (!user) {
         setCloudProfile(null);
         setCloudSyncState('disconnected');
+        setCloudSyncEnabled(false);
+        setCloudProfileLoaded(true);
         return;
       }
       if (!user.emailVerified) {
         setCloudError('Google account email verification is required for Cloud Storage Database.');
         setCloudSyncState('error');
+        setCloudProfileLoaded(true);
         return;
       }
       try {
         const fetched = await fetchCloudOperative(user.uid);
         setCloudProfile(fetched);
         setCloudSyncState('synced');
+        setCloudProfileLoaded(true);
       } catch (err) {
         setCloudSyncState('error');
         setCloudError(
           formatCloudErrorMessage(err, 'Unable to read Cloud Storage Database.')
         );
+        setCloudProfileLoaded(false);
       }
     });
     return () => unsubscribe();
   }, []);
+
+  // Create the first cloud save automatically once a local profile is linked to a new Google account.
+  useEffect(() => {
+    if (
+      cloudUser &&
+      cloudUser.emailVerified &&
+      cloudProfileLoaded &&
+      !cloudProfile &&
+      account &&
+      !guestPassExpiresAt
+    ) {
+      setCloudSyncEnabled(true);
+    }
+  }, [cloudUser, cloudProfileLoaded, cloudProfile, account, guestPassExpiresAt]);
 
   // Persist account wallet, ownedItems, loadout, stats, and dailyMissions inside localStorage account record
   useEffect(() => {
@@ -391,7 +423,14 @@ export default function App() {
 
   // Debounced sync to Cloud Storage Database when connected (skipped for temporary guest passes)
   useEffect(() => {
-    if (!account || !cloudUser || !cloudUser.emailVerified || guestPassExpiresAt) return;
+    if (
+      !account ||
+      !cloudUser ||
+      !cloudUser.emailVerified ||
+      !cloudProfileLoaded ||
+      !cloudSyncEnabled ||
+      guestPassExpiresAt
+    ) return;
     if (cloudSyncTimerRef.current) {
       window.clearTimeout(cloudSyncTimerRef.current);
     }
@@ -420,7 +459,7 @@ export default function App() {
         window.clearTimeout(cloudSyncTimerRef.current);
       }
     };
-  }, [account?.username, account?.bio, account?.avatarId, wallet, ownedItems, loadout, stats, dailyMissions, cloudUser, guestPassExpiresAt]);
+  }, [account?.username, account?.bio, account?.avatarId, wallet, ownedItems, loadout, stats, dailyMissions, cloudUser, cloudProfileLoaded, cloudSyncEnabled, guestPassExpiresAt]);
 
   // Poll live PvP room counts while on MENU
   useEffect(() => {
@@ -474,12 +513,30 @@ export default function App() {
   const handleConnectCloudDb = async () => {
     setCloudBusy(true);
     setCloudError(null);
+    setCloudProfileLoaded(false);
+    setCloudProfile(null);
+    setCloudSyncEnabled(false);
     try {
       const cred = await connectCloudStorageDb();
       if (cred.user && cred.user.emailVerified) {
         const fetched = await fetchCloudOperative(cred.user.uid);
         setCloudProfile(fetched);
+        setCloudProfileLoaded(true);
         if (account && !guestPassExpiresAt) {
+          if (
+            fetched &&
+            !window.confirm(
+              `A cloud save for ${fetched.username} already exists. Choose OK to replace it with this device's ${account.username} profile, or Cancel to keep the cloud save.`
+            )
+          ) {
+            if (fetched.username.toLowerCase() === account.username.toLowerCase()) {
+              const restored = activateCloudAccount(fetched);
+              setCloudSyncEnabled(true);
+              handleAuthenticated(restored);
+            }
+            setCloudSyncState('synced');
+            return;
+          }
           const snapshot: UserAccount = {
             ...account,
             wallet,
@@ -490,6 +547,7 @@ export default function App() {
           };
           await upsertCloudOperative(cred.user.uid, snapshot);
           setCloudProfile(snapshot);
+          setCloudSyncEnabled(true);
         }
         setCloudSyncState('synced');
       }
@@ -509,6 +567,8 @@ export default function App() {
     try {
       await disconnectCloudStorageDb();
       setCloudProfile(null);
+      setCloudProfileLoaded(false);
+      setCloudSyncEnabled(false);
       setCloudSyncState('disconnected');
     } catch (err) {
       setCloudError(
@@ -534,6 +594,7 @@ export default function App() {
       };
       await upsertCloudOperative(cloudUser.uid, snapshot);
       setCloudProfile(snapshot);
+      setCloudSyncEnabled(true);
       setCloudSyncState('synced');
     } catch (err) {
       setCloudSyncState('error');
@@ -542,22 +603,25 @@ export default function App() {
   };
 
   const handleSyncAccountToCloud = async (targetAccount: UserAccount) => {
-    if (!cloudUser) return;
+    if (!cloudUser || !cloudProfileLoaded || cloudProfile) return;
     setCloudSyncState('syncing');
     await upsertCloudOperative(cloudUser.uid, targetAccount);
     setCloudProfile(targetAccount);
+    setCloudSyncEnabled(true);
     setCloudSyncState('synced');
   };
 
   const handleDeployCloudProfile = () => {
     if (!cloudProfile) return;
     const activated = activateCloudAccount(cloudProfile);
+    setCloudSyncEnabled(true);
     handleAuthenticated(activated);
   };
 
   const handleSignOut = (nextAuthMode?: 'login' | 'signup') => {
     signOutAccount();
     setAccount(null);
+    setCloudSyncEnabled(false);
     setGuestPassExpiresAt(null);
     setAuthInitialMode(nextAuthMode);
     setPhase('MENU');
@@ -990,6 +1054,7 @@ export default function App() {
             onAuthenticated={handleAuthenticated}
             cloudUser={cloudUser}
             cloudProfile={cloudProfile}
+            cloudProfileLoaded={cloudProfileLoaded}
             cloudBusy={cloudBusy}
             cloudError={cloudError}
             onConnectCloudDb={handleConnectCloudDb}
