@@ -23,6 +23,7 @@ import { PedestalInspector3D } from '../three/StorePedestal3D';
 import {
   TACTICAL_AVATARS,
   changeAccountPassword,
+  getRememberedUsername,
   getRankFromStats,
   listSavedAccounts,
   loginAccount,
@@ -115,7 +116,9 @@ export default function AuthScreen({
   const [mode, setMode] = useState<'login' | 'signup'>(
     initialMode ?? (savedAccounts.length > 0 ? 'login' : 'signup')
   );
-  const [username, setUsername] = useState(savedAccounts[0]?.username || '');
+  const [username, setUsername] = useState(
+    getRememberedUsername() || savedAccounts[0]?.username || ''
+  );
   const [password, setPassword] = useState('');
   const [avatarId, setAvatarId] = useState<TacticalAvatarId>('avatar_specter');
   const [error, setError] = useState<string | null>(null);
@@ -320,7 +323,9 @@ export default function AuthScreen({
                 <User className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   id="auth-username"
+                  name="username"
                   type="text"
+                  autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   maxLength={18}
@@ -417,7 +422,9 @@ export default function AuthScreen({
                 <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   id="auth-password"
+                  name="password"
                   type="password"
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={changingPassword ? 'Enter current passcode' : 'Minimum 4 characters'}
@@ -436,7 +443,9 @@ export default function AuthScreen({
                     <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       id="auth-new-password"
+                      name="new-password"
                       type="password"
+                      autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Min 4 chars"
@@ -452,7 +461,9 @@ export default function AuthScreen({
                     <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       id="auth-confirm-password"
+                      name="confirm-password"
                       type="password"
+                      autoComplete="new-password"
                       value={confirmNewPassword}
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
                       placeholder="Re-enter"

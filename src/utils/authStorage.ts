@@ -9,6 +9,7 @@ import { createEmptyDailyMissionsState } from '../config/dailyMissions';
 
 const ACCOUNTS_KEY = 'heroic_distance_accounts_v1';
 const SESSION_KEY = 'heroic_distance_session_v1';
+const REMEMBERED_USERNAME_KEY = 'heroic_distance_last_username_v1';
 
 export const TACTICAL_AVATARS: {
   id: TacticalAvatarId;
@@ -88,6 +89,25 @@ export function getActiveSessionUsername(): string | null {
   }
 }
 
+export function getRememberedUsername(): string | null {
+  try {
+    const username = localStorage.getItem(REMEMBERED_USERNAME_KEY);
+    if (!username) return null;
+    const account = readAccountsMap()[username.toLowerCase()];
+    return account?.username || null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberUsername(username: string) {
+  try {
+    localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
+  } catch {
+    // Ignore storage errors; the saved account list remains available when possible.
+  }
+}
+
 export function getActiveAccount(): UserAccount | null {
   const uname = getActiveSessionUsername();
   if (!uname) return null;
@@ -156,6 +176,7 @@ export function registerAccount(opts: {
 
   map[key] = account;
   writeAccountsMap(map);
+  rememberUsername(cleanName);
   if (opts.autoLogin !== false) {
     try {
       localStorage.setItem(SESSION_KEY, cleanName);
@@ -174,6 +195,7 @@ export function activateCloudAccount(cloudAccount: UserAccount): UserAccount {
   };
   map[key] = merged;
   writeAccountsMap(map);
+  rememberUsername(merged.username);
   try {
     localStorage.setItem(SESSION_KEY, merged.username);
   } catch {}
@@ -199,6 +221,7 @@ export function loginAccount(opts: {
   try {
     localStorage.setItem(SESSION_KEY, found.username);
   } catch {}
+  rememberUsername(found.username);
   return { ok: true, account: found };
 }
 
@@ -272,6 +295,7 @@ export function renameAccountUsername(opts: {
   if (newKey !== oldKey && map[newKey]) {
     return { ok: false, error: 'An operative with that callsign already exists.' };
   }
+  const wasRemembered = getRememberedUsername()?.toLowerCase() === oldKey;
 
   let nextPasswordHash = found.passwordHash;
   if (found.passwordHash) {
@@ -295,6 +319,7 @@ export function renameAccountUsername(opts: {
   }
   map[newKey] = updated;
   writeAccountsMap(map);
+  if (wasRemembered) rememberUsername(updated.username);
 
   try {
     if ((getActiveSessionUsername() || '').toLowerCase() === oldKey) {

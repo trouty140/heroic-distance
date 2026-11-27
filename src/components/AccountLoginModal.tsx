@@ -290,7 +290,9 @@ export default function AccountLoginModal({
                     <User className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       id="modal-login-username"
+                      name="username"
                       type="text"
+                      autoComplete="username"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       maxLength={18}
@@ -321,7 +323,9 @@ export default function AccountLoginModal({
                     <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       id="modal-login-password"
+                      name="password"
                       type="password"
+                      autoComplete="current-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your passcode"
